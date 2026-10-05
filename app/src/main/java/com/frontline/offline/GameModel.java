@@ -11,7 +11,8 @@ import java.util.Random;
 public final class GameModel {
     public static final int NEUTRAL = -1, PLAYER = 0;
     public static final int PLAYING = 0, WON = 1, LOST = 2;
-    public static final int MAX_TROOPS = 1_000_000, MAX_CONVOYS = 900;
+    public static final int NORMAL_CAP = 100, MAX_TROOPS = 125, MAX_CONVOYS = 900, MAX_TEAMS = 6;
+    private static final int LEGACY_MAX_TROOPS = 1_000_000;
     public static final String[] DIFFICULTIES = {"Easy", "Normal", "Hard"};
     public static final Level[] LEVELS = {
         new Level("First Contact", 3, 2, 1, new int[] {}, 70),
@@ -43,7 +44,37 @@ public final class GameModel {
         new Level("Iron Meridian", 6, 5, new int[] {1,4,7,10,13,16,19,22,25,28}, 240, new int[] {12,17,0,29}, new int[] {1,3,2}, 40,40,12),
         new Level("Fractured Throne", 6, 5, new int[] {2,7,9,14,16,21,23,26}, 250, new int[] {0,29,5,24}, new int[] {3,1,2}, 40,41,12),
         new Level("Last Convergence", 6, 5, new int[] {8,9,14,15,20,21}, 260, new int[] {12,17,0,29}, new int[] {2,1,3}, 40,42,13),
-        new Level("Concord Citadel", 6, 5, new int[] {2,3,8,9,14,15,20,21,26,27}, 270, new int[] {12,17,0,29}, new int[] {1,2,3}, 40,44,13)
+        new Level("Concord Citadel", 6, 5, new int[] {2,3,8,9,14,15,20,21,26,27}, 270, new int[] {12,17,0,29}, new int[] {1,2,3}, 40,44,13),
+        new Level("Western Passage", 7, 6, new int[] {9,12,23,26}, 285, new int[] {0,41,6,35,20}, new int[] {4,1,2,3}, 42,44,12),
+        new Level("Ironwater Coast", 7, 6, new int[] {8,10,17,24,31,33}, 300, new int[] {0,41,6,35,20}, new int[] {4,2,3,1}, 42,45,12),
+        new Level("Rivet Provinces", 7, 7, new int[] {9,12,23,25,36,39}, 315, new int[] {0,48,6,42,27}, new int[] {4,1,3,2}, 44,45,13),
+        new Level("Steel Causeway", 8, 6, new int[] {10,13,18,21,26,29,34,37}, 325, new int[] {0,47,7,40,23}, new int[] {4,3,2,1}, 44,46,13),
+        new Level("Dominion Ring", 7, 7, new int[] {8,10,12,22,24,26,36,38,40}, 340, new int[] {0,48,6,42,27}, new int[] {4,2,1,3}, 44,47,13),
+        new Level("Soren Fortress", 8, 7, new int[] {9,14,18,21,34,37,41,46}, 355, new int[] {0,55,7,48,31}, new int[] {4,1,2,3}, 46,48,14),
+        new Level("Frostline Landing", 8, 7, new int[] {10,13,18,21,34,37,42,45}, 350, new int[] {0,55,7,48,24,31}, new int[] {5,4,1,2,3}, 44,45,12),
+        new Level("Whitewater Reach", 8, 7, new int[] {9,11,13,25,27,29,41,43,45}, 365, new int[] {0,55,7,48,24,31}, new int[] {5,2,4,3,1}, 44,46,13),
+        new Level("Frozen Channels", 8, 8, new int[] {10,13,18,21,42,45,50,53}, 380, new int[] {0,63,7,56,24,31}, new int[] {5,3,1,4,2}, 46,46,13),
+        new Level("Glacier Divide", 9, 7, new int[] {11,15,20,24,38,42,47,51}, 390, new int[] {0,62,8,54,27,35}, new int[] {5,4,2,1,3}, 46,47,14),
+        new Level("Icebound Circuit", 8, 8, new int[] {9,11,13,17,21,41,45,49,51,53}, 400, new int[] {0,63,7,56,24,31}, new int[] {5,1,3,2,4}, 46,48,14),
+        new Level("Kestrel Anchorage", 9, 7, new int[] {10,12,14,16,28,30,32,34,46,48,50,52}, 415, new int[] {0,62,8,54,27,35}, new int[] {5,4,1,2,3}, 48,49,14),
+        new Level("Broken Coalition", 8, 7, new int[] {10,13,18,21,34,37,42,45}, 370, new int[] {7,48,0,55,31,24}, new int[] {1,4,5,2,3}, 46,47,13),
+        new Level("Five Banners", 8, 8, new int[] {10,13,18,21,42,45,50,53}, 390, new int[] {56,7,63,0,31,24}, new int[] {4,5,2,3,1}, 46,48,14),
+        new Level("Cinder and Steel", 9, 7, new int[] {11,15,20,24,38,42,47,51}, 405, new int[] {8,54,0,62,35,27}, new int[] {1,4,3,5,2}, 48,48,14),
+        new Level("Scattered Oaths", 8, 8, new int[] {9,11,13,17,19,21,41,43,45,49,51,53}, 420, new int[] {0,63,7,56,24,31}, new int[] {3,2,5,1,4}, 48,49,14),
+        new Level("Fivefold Siege", 9, 8, new int[] {11,15,20,24,47,51,56,60}, 440, new int[] {0,71,8,63,27,35}, new int[] {4,1,2,3,5}, 48,50,15),
+        new Level("Coalition Keep", 9, 8, new int[] {10,12,14,16,28,30,32,34,46,48,50,52,64,66,68,70}, 450, new int[] {0,71,8,63,27,35}, new int[] {4,5,1,2,3}, 50,50,15),
+        new Level("Throne Road", 8, 8, new int[] {10,13,18,21,42,45,50,53}, 405, new int[] {24,31,0,63,7,56}, new int[] {5,2,4,1,3}, 48,48,14),
+        new Level("Royal Meridian", 9, 7, new int[] {11,15,20,24,38,42,47,51}, 420, new int[] {27,35,0,62,8,54}, new int[] {2,5,1,3,4}, 48,49,14),
+        new Level("Crown Crossroads", 9, 8, new int[] {10,12,14,16,46,48,50,52}, 440, new int[] {0,71,8,63,27,35}, new int[] {5,4,3,2,1}, 50,49,15),
+        new Level("Kings of the Divide", 9, 8, new int[] {11,15,20,24,38,42,47,51,56,60}, 450, new int[] {0,71,8,63,27,35}, new int[] {3,1,5,4,2}, 50,50,15),
+        new Level("Four Crown Summit", 9, 8, new int[] {10,12,14,16,28,30,32,34,46,48,50,52}, 465, new int[] {0,71,8,63,27,35}, new int[] {4,2,1,5,3}, 50,51,15),
+        new Level("Sovereign Bastion", 9, 8, new int[] {11,13,15,20,22,24,47,49,51,56,58,60}, 480, new int[] {0,71,8,63,27,35}, new int[] {5,4,1,2,3}, 50,52,16),
+        new Level("Horizon's Edge", 8, 8, new int[] {10,13,18,21,42,45,50,53}, 430, new int[] {7,56,0,63,24,31}, new int[] {1,2,3,4,5}, 48,49,14),
+        new Level("The Long Frontier", 9, 7, new int[] {11,15,20,24,38,42,47,51}, 440, new int[] {8,54,0,62,27,35}, new int[] {2,3,4,5,1}, 50,50,15),
+        new Level("Alliance Bridge", 9, 8, new int[] {10,12,14,16,46,48,50,52}, 455, new int[] {63,8,71,0,35,27}, new int[] {3,4,5,1,2}, 50,50,15),
+        new Level("Final Assembly", 9, 8, new int[] {11,15,20,24,38,42,47,51,56,60}, 470, new int[] {35,27,0,71,8,63}, new int[] {4,5,1,2,3}, 50,51,15),
+        new Level("Beyond the Accord", 9, 8, new int[] {10,12,14,16,28,30,32,34,46,48,50,52}, 485, new int[] {71,0,63,8,35,27}, new int[] {5,1,2,3,4}, 52,52,16),
+        new Level("United Citadel", 9, 8, new int[] {11,13,15,20,22,24,47,49,51,56,58,60}, 500, new int[] {27,35,8,63,0,71}, new int[] {1,2,3,4,5}, 52,54,16)
     };
 
     public static final class Level {
@@ -110,7 +141,9 @@ public final class GameModel {
     public final int levelIndex;
     public int difficulty, outcome = PLAYING, captures, unitsLost, unitsSent;
     public float elapsed;
-    private final float[] aiTimers = new float[4];
+    private final float[] aiTimers = new float[MAX_TEAMS];
+    public final boolean[] resigned = new boolean[MAX_TEAMS];
+    private float dominanceSeconds;
     private final Random random;
     private final ArrayList<Collision> collisions = new ArrayList<>();
 
@@ -197,12 +230,9 @@ public final class GameModel {
             clashes.get(i).remaining -= dt;
             if (clashes.get(i).remaining <= 0) clashes.remove(i);
         }
-        boolean[] overflow = new boolean[4];
-        for (int owner = 0; owner <= level().opponents; owner++) overflow[owner] = growthUncapped(owner);
         for (Territory territory : territories) {
             if (territory.owner != NEUTRAL) {
-                double limit = overflow[territory.owner] ? MAX_TROOPS : 99;
-                territory.troops = Math.max(territory.troops,Math.min(limit,territory.troops+dt*productionRate(territory)));
+                territory.troops = Math.min(troopCap(territory),territory.troops+dt*productionRate(territory));
             }
         }
         intercept(dt);
@@ -215,9 +245,11 @@ public final class GameModel {
                 troops.remove(i);
             }
         }
+        checkResignation(dt);
         checkOutcome();
         if (outcome != PLAYING) return;
         for (int owner = 1; owner <= level().opponents; owner++) {
+            if (resigned[owner]) continue;
             aiTimers[owner] -= dt;
             if (aiTimers[owner] <= 0) {
                 playAi(owner);
@@ -229,15 +261,14 @@ public final class GameModel {
     private void arrive(Troop troop) {
         Territory target = territories.get(troop.target);
         if (target.owner == troop.owner) {
-            double limit = growthUncapped(troop.owner) ? MAX_TROOPS : 99;
-            target.troops = Math.max(target.troops,Math.min(limit,target.troops+troop.units));
+            target.troops = Math.min(troopCap(target),target.troops+troop.units);
         } else {
             int defenders = target.count(), lost = Math.min(defenders,troop.units);
             if (troop.owner == PLAYER || target.owner == PLAYER) unitsLost += lost;
             if (troop.units <= defenders) target.troops -= troop.units;
             else {
                 target.owner = troop.owner; target.troops = troop.units-defenders;
-                if (!growthUncapped(troop.owner)) target.troops = Math.min(99,target.troops);
+                target.troops = Math.min(troopCap(target),target.troops);
                 if (troop.owner == PLAYER) captures++;
             }
         }
@@ -294,23 +325,43 @@ public final class GameModel {
         return time >= 0 && time <= window ? start+time : -1;
     }
 
-    public boolean growthUncapped(int owner) {
-        boolean owned = false;
-        for (Territory territory : territories) if (territory.owner == owner) {
-            owned = true;
-            if (territory.count() < 99) return false;
-        }
-        return owned;
-    }
+    public static int troopCap(Territory territory) { return territory.capital ? MAX_TROOPS : NORMAL_CAP; }
 
     public int capturedKings(int owner) {
         int count = 0;
         for (Territory territory : territories)
-            if (territory.capital && territory.owner == owner && territory.originalOwner != owner) count++;
+            if (territory.capital && territory.owner == owner && territory.originalOwner != NEUTRAL && territory.originalOwner != owner) count++;
         return count;
     }
 
-    public double teamMultiplier(int owner) { return Math.pow(1.5,capturedKings(owner)); }
+    public double teamMultiplier(int owner) {
+        int kings = capturedKings(owner);
+        return kings < 4 ? Math.pow(1.2,kings) : 3*Math.pow(1.2,kings-4);
+    }
+
+    private void checkResignation(float dt) {
+        if (owned(PLAYER)*10 <= territories.size()*9) { dominanceSeconds = 0; return; }
+        dominanceSeconds = Math.min(10,dominanceSeconds+dt);
+        if (dominanceSeconds < 9.999f) return;
+        for (int owner = 1; owner <= level().opponents; owner++) {
+            if (resigned[owner] || army(owner) == 0 && owned(owner) == 0 || canRecapture(owner)) continue;
+            resigned[owner] = true;
+            for (Territory territory : territories) if (territory.owner == owner) {
+                territory.owner = PLAYER; captures++;
+            }
+            for (int i = troops.size()-1; i >= 0; i--) if (troops.get(i).owner == owner) troops.remove(i);
+        }
+    }
+
+    private boolean canRecapture(int owner) {
+        // Count every remaining unit, including convoys, as potentially usable support.
+        int remaining = army(owner);
+        for (Territory territory : territories) if (territory.owner == PLAYER) {
+            int exposed = Math.max(0,territory.count()-incoming(territory.id,PLAYER,false));
+            if (remaining > exposed) return true;
+        }
+        return false;
+    }
 
     private void checkOutcome() {
         boolean playerAlive = false, enemiesAlive = false;
@@ -351,7 +402,7 @@ public final class GameModel {
                 } else {
                     amount = captureBudget(target,owner,travel);
                     if (amount <= 0 || amount > capacity) continue;
-                    score = attackScore(target,amount,distance);
+                    score = attackScore(target,owner,amount,distance);
                 }
                 if (score > bestScore) { bestScore = score; bestSource = source; bestTarget = target; bestAmount = amount; }
             }
@@ -378,7 +429,7 @@ public final class GameModel {
     private int captureBudget(Territory target, int owner, float travel) {
         double rate = target.owner == NEUTRAL ? 0 : productionRate(target);
         int margin = difficulty == 0 ? 7 : difficulty == 1 ? 5 : 4;
-        double defense = target.troops+rate*travel;
+        double defense = Math.min(troopCap(target),target.troops+rate*travel);
         // Defenders also grow while a staggered volley is arriving, not just during travel.
         double divisor = 1-rate*.022;
         int amount = (int)Math.ceil((defense+margin)/divisor);
@@ -393,10 +444,11 @@ public final class GameModel {
         return amount;
     }
 
-    private double attackScore(Territory target, int amount, float distance) {
+    private double attackScore(Territory target, int owner, int amount, float distance) {
         double preference = target.owner == NEUTRAL ? 7-difficulty*3 : difficulty*3;
         double variation = random.nextDouble()*(difficulty == 0 ? 6 : difficulty == 1 ? 3 : 1.5);
-        return 26+preference+(target.capital ? 2 : 0)-amount*.32-distance*4+variation;
+        double recovery = difficulty > 0 && target.capital && target.originalOwner == owner ? (difficulty == 1 ? 20 : 34) : 0;
+        return 26+preference+(target.capital ? 2 : 0)+recovery-amount*.32-distance*4+variation;
     }
 
     private void coordinateAttack(int owner, int[] available) {
@@ -421,7 +473,7 @@ public final class GameModel {
                 if (amount <= 0 || capacity >= amount) break;
             }
             if (sources.size() < 2 || amount <= 0 || capacity < amount || troops.size() >= MAX_CONVOYS) continue;
-            double score = attackScore(target,amount,totalDistance/sources.size())-2;
+            double score = attackScore(target,owner,amount,totalDistance/sources.size())-2;
             if (score > bestScore) {
                 bestScore = score; targetChoice = target; bestSources = sources;
                 bestAmount = amount; bestCapacity = capacity;
@@ -500,11 +552,7 @@ public final class GameModel {
     public byte[] save() throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(bytes);
-        boolean extended = false;
-        for (Territory territory : territories) if (territory.troops > 99) extended = true;
-        for (Troop troop : troops) if (troop.units != 1) extended = true;
-        // Keep V4-compatible bytes unless larger armies need the extended representation.
-        out.writeInt(extended ? 0x464C3032 : 0x464C3031); out.writeInt(levelIndex); out.writeInt(difficulty);
+        out.writeInt(0x464C3033); out.writeInt(levelIndex); out.writeInt(difficulty);
         out.writeFloat(elapsed); out.writeInt(outcome); out.writeInt(captures);
         out.writeInt(unitsLost); out.writeInt(unitsSent);
         out.writeInt(territories.size());
@@ -513,9 +561,11 @@ public final class GameModel {
         for (Troop troop : troops) {
             out.writeInt(troop.source); out.writeInt(troop.target); out.writeInt(troop.owner);
             out.writeFloat(troop.duration); out.writeFloat(troop.age);
-            if (extended) out.writeInt(troop.units);
+            out.writeInt(troop.units);
         }
         for (float timer : aiTimers) out.writeFloat(timer);
+        out.writeFloat(dominanceSeconds);
+        for (boolean surrendered : resigned) out.writeBoolean(surrendered);
         out.flush(); return bytes.toByteArray();
     }
 
@@ -523,9 +573,9 @@ public final class GameModel {
         if (bytes == null || bytes.length > 50000) throw new IOException("Invalid save size");
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
         int version = in.readInt();
-        if (version != 0x464C3031 && version != 0x464C3032) throw new IOException("Unknown save version");
+        if (version != 0x464C3031 && version != 0x464C3032 && version != 0x464C3033) throw new IOException("Unknown save version");
         int level = in.readInt(), difficulty = in.readInt();
-        if (level < 0 || level >= LEVELS.length || difficulty < 0 || difficulty > 2) throw new IOException("Invalid level");
+        if (level < 0 || level >= LEVELS.length || version != 0x464C3033 && level >= 30 || difficulty < 0 || difficulty > 2) throw new IOException("Invalid level");
         GameModel model = new GameModel(level, difficulty, 100 + level);
         model.elapsed = in.readFloat(); model.outcome = in.readInt(); model.captures = in.readInt();
         model.unitsLost = in.readInt(); model.unitsSent = in.readInt();
@@ -536,22 +586,32 @@ public final class GameModel {
             territory.owner = in.readInt(); territory.troops = in.readDouble();
             if (territory.owner < NEUTRAL || territory.owner > model.level().opponents
                 || !Double.isFinite(territory.troops) || territory.troops < 0
-                || territory.troops > (version == 0x464C3031 ? 99 : MAX_TROOPS)) throw new IOException("Invalid territory");
+                || territory.troops > (version == 0x464C3031 ? 99 : version == 0x464C3032 ? LEGACY_MAX_TROOPS : troopCap(territory))) throw new IOException("Invalid territory");
+            territory.troops = Math.min(troopCap(territory),territory.troops);
         }
         int count = in.readInt();
         if (count < 0 || count > MAX_CONVOYS) throw new IOException("Invalid troop count");
         for (int i = 0; i < count; i++) {
             int source = in.readInt(), target = in.readInt(), owner = in.readInt();
             float duration = in.readFloat(), age = in.readFloat();
-            int units = version == 0x464C3032 ? in.readInt() : 1;
+            int units = version == 0x464C3031 ? 1 : in.readInt();
             if (source < 0 || target < 0 || source >= model.territories.size() || target >= model.territories.size()
                 || owner < PLAYER || owner > model.level().opponents || !Float.isFinite(duration) || duration < .01f || duration > 30
-                || !Float.isFinite(age) || age < -30 || age > duration || units < 1 || units > MAX_TROOPS) throw new IOException("Invalid convoy");
+                || !Float.isFinite(age) || age < -30 || age > duration || units < 1 || units > LEGACY_MAX_TROOPS) throw new IOException("Invalid convoy");
             Troop troop = new Troop(source,target,owner,duration,age); troop.units = units; model.troops.add(troop);
         }
-        for (int i = 0; i < model.aiTimers.length; i++) {
+        for (int i = 0; i < (version == 0x464C3033 ? MAX_TEAMS : 4); i++) {
             model.aiTimers[i] = in.readFloat();
             if (!Float.isFinite(model.aiTimers[i]) || model.aiTimers[i] < 0 || model.aiTimers[i] > 10) throw new IOException("Invalid AI timer");
+        }
+        if (version == 0x464C3033) {
+            model.dominanceSeconds = in.readFloat();
+            if (!Float.isFinite(model.dominanceSeconds) || model.dominanceSeconds < 0 || model.dominanceSeconds > 10) throw new IOException("Invalid dominance timer");
+            for (int i = 0; i < MAX_TEAMS; i++) {
+                int flag = in.readUnsignedByte();
+                if (flag > 1 || flag == 1 && (i == PLAYER || i > model.level().opponents || model.owned(i) > 0 || model.army(i) > 0)) throw new IOException("Invalid resignation");
+                model.resigned[i] = flag == 1;
+            }
         }
         if (in.available() != 0) throw new IOException("Unexpected save data");
         return model;

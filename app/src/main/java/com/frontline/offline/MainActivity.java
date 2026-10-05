@@ -66,6 +66,8 @@ public final class MainActivity extends Activity {
         private int safeTop, safeBottom;
         private long previousFrame, lastSave, lastCaptureCue;
         private boolean running;
+        private boolean cameraTouch;
+        private float touchSpan, touchX, touchY;
         private final Runnable tooltip = new Runnable() {
             @Override public void run() {
                 String label = scene.pressedLabel();
@@ -144,13 +146,31 @@ public final class MainActivity extends Activity {
             float x = (event.getX()-offsetX)/scale, y = (event.getY()-safeTop)/scale;
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
+                    cameraTouch = false;
                     scene.down(x,y); handler.postDelayed(tooltip,600); break;
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    if (event.getPointerCount() >= 2) {
+                        scene.cancel(); cameraTouch = true; handler.removeCallbacks(tooltip);
+                        touchX = ((event.getX(0)+event.getX(1))/2-offsetX)/scale;
+                        touchY = ((event.getY(0)+event.getY(1))/2-safeTop)/scale;
+                        touchSpan = (float)Math.hypot(event.getX(0)-event.getX(1),event.getY(0)-event.getY(1));
+                    }
+                    break;
                 case MotionEvent.ACTION_MOVE:
-                    scene.move(x,y); handler.removeCallbacks(tooltip); break;
+                    if (cameraTouch && event.getPointerCount() >= 2) {
+                        float nextX = ((event.getX(0)+event.getX(1))/2-offsetX)/scale;
+                        float nextY = ((event.getY(0)+event.getY(1))/2-safeTop)/scale;
+                        float span = (float)Math.hypot(event.getX(0)-event.getX(1),event.getY(0)-event.getY(1));
+                        scene.cameraGesture(touchX,touchY,touchSpan > 0 ? span/touchSpan : 1,nextX-touchX,nextY-touchY);
+                        touchX = nextX; touchY = nextY; touchSpan = span;
+                    } else if (!cameraTouch) scene.move(x,y);
+                    handler.removeCallbacks(tooltip); break;
                 case MotionEvent.ACTION_UP:
-                    handler.removeCallbacks(tooltip); scene.up(x,y); performClick(); break;
+                    handler.removeCallbacks(tooltip);
+                    if (cameraTouch) scene.cancel(); else scene.up(x,y);
+                    cameraTouch = false; performClick(); break;
                 case MotionEvent.ACTION_CANCEL:
-                    handler.removeCallbacks(tooltip); scene.cancel(); break;
+                    handler.removeCallbacks(tooltip); scene.cancel(); cameraTouch = false; break;
                 default: return true;
             }
             invalidate(); return true;
@@ -187,6 +207,8 @@ public final class MainActivity extends Activity {
         }
 
         private void color(int color) { paint.setColor(color); paint.setStyle(Paint.Style.FILL); }
+        @Override public void clip(float x,float y,float width,float height) { canvas.save(); canvas.clipRect(x,y,x+width,y+height); }
+        @Override public void unclip() { canvas.restore(); }
         @Override public void rect(float x,float y,float w,float h,float radius,int color) {
             color(color); canvas.drawRoundRect(x,y,x+w,y+h,radius,radius,paint);
         }

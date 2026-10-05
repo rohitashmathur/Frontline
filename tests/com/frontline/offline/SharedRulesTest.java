@@ -2,14 +2,14 @@ package com.frontline.offline;
 
 import java.util.Arrays;
 
-final class V5RulesTest {
+final class SharedRulesTest {
     private static int checks;
     private static final GameScene.Events SILENT = new GameScene.Events() {
         public void changed() {} public void cue(int kind) {}
     };
 
     static int run() throws Exception {
-        interceptions(); overflowAndPackets(); kingGrowth(); tutorialAndRestart(); soundtrack();
+        interceptions(); boundedPackets(); kingGrowth(); tutorialAndRestart(); soundtrack();
         return checks;
     }
 
@@ -61,39 +61,37 @@ final class V5RulesTest {
         check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"Partly intercepted large army restores with the surviving count");
     }
 
-    private static void overflowAndPackets() throws Exception {
+    private static void boundedPackets() throws Exception {
         GameModel model = quiet(0);
         GameModel.Territory crown = model.territories.get(0), normal = model.territories.get(1);
-        crown.troops = 99; normal.owner = 0; normal.troops = 50; model.update(.1f);
-        check(crown.troops == 99 && normal.troops > 50,"One unsaturated owned tile keeps the ordinary production cap");
-        normal.troops = 99; model.update(.1f);
-        check(crown.troops > 99 && normal.troops > 99,"All owned tiles at 99 unlock growth beyond 99 for that team");
-        check(model.territories.get(2).owner == -1 && model.territories.get(2).troops < 99,"Neutral territories do not count toward team saturation");
-        double before = crown.troops; normal.troops = 20; model.update(.1f);
-        check(crown.troops == before && normal.troops > 20,"An unsaturated tile stops overflow growth without deleting existing excess troops");
-        check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"Over-99 garrisons survive exact save and restore");
-        model = quiet(0); model.territories.get(0).troops = 2500;
-        check(model.launch(0,1,.5) == 1250,"Half of a large army sends its full selected amount");
-        check(flying(model,0) == 1250 && model.territories.get(0).troops == 1250 && model.troops.size() <= 900,"Large dispatch conserves all units within the visual packet budget");
-        check(model.army(0) == 2500,"Army total counts grouped units rather than particles");
-        check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"Packed large armies restore all units and timings");
-        model = quiet(0); model.territories.get(0).troops = 1200;
-        check(model.launch(0,1,1) == 1200 && model.territories.get(0).troops == 0,"100% really sends all troops above 99");
-        model = quiet(0); model.unitsSent = Integer.MAX_VALUE-10; model.territories.get(0).troops = 1200;
+        crown.troops = 125; normal.owner = 0; normal.troops = 100; model.update(.1f);
+        check(crown.troops == 125 && normal.troops == 100,"Saturated teams never exceed the separate finite caps");
+        normal.troops = 20; model.update(.1f);
+        check(crown.troops == 125 && normal.troops > 20,"Ordinary production does not depend on team saturation");
+        check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"125-troop kings survive exact save and restore");
+        model = quiet(0); model.territories.get(0).troops = 125;
+        for (int i = 0; i < 899; i++) model.troops.add(new GameModel.Troop(5,5,1,20,-10));
+        check(model.launch(0,1,.5) == 62,"Half dispatch from a full king rounds down");
+        check(flying(model,0) == 62 && model.territories.get(0).troops == 63 && model.troops.size() == 900,"Limited convoy slots preserve selected troop quantities in packets");
+        check(model.army(0) == 125,"Army total counts grouped units rather than particles");
+        check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"Grouped armies restore all units and timings");
+        model = quiet(0); model.territories.get(0).troops = 125;
+        check(model.launch(0,1,1) == 125 && model.territories.get(0).troops == 0,"100% sends every troop from a full king");
+        model = quiet(0); model.unitsSent = Integer.MAX_VALUE-10; model.territories.get(0).troops = 125;
         model.launch(0,1,1);
         check(model.unitsSent == Integer.MAX_VALUE,"Very long rounds cannot overflow the sent counter and invalidate saves");
         check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"Saturated sent counter stays restorable");
         model = quiet(0); model.territories.get(1).owner = 0; model.territories.get(1).troops = 99;
-        model.territories.get(0).troops = 99;
+        model.territories.get(0).troops = 125;
         GameModel.Troop packet = new GameModel.Troop(0,1,0,1,.99f); packet.units = 12; model.troops.add(packet); model.update(.02f);
-        check(model.territories.get(1).count() >= 111,"Saturated teams can reinforce a tile above 99");
+        check(model.territories.get(1).count() == 100,"Reinforcements respect the ordinary tile cap");
         model = quiet(0); model.territories.get(0).troops = GameModel.MAX_TROOPS+1;
         reject(model.save(),"Corrupt oversized garrison rejected");
         model = quiet(0); packet = new GameModel.Troop(0,1,0,1,0); packet.units = -1; model.troops.add(packet);
         reject(model.save(),"Invalid grouped troop quantity rejected");
         model = quiet(0);
-        check(java.nio.ByteBuffer.wrap(model.save()).getInt() == 0x464C3031,"Normal V4 battles retain their legacy byte format");
-        check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"Legacy-format battle compatibility remains exact");
+        check(java.nio.ByteBuffer.wrap(model.save()).getInt() == 0x464C3033,"V6 battles store six teams and resignation state in the new format");
+        check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"V6 battle roundtrip remains exact");
     }
 
     private static void kingGrowth() throws Exception {
@@ -102,30 +100,30 @@ final class V5RulesTest {
         model.territories.get(1).owner = 0; model.territories.get(1).troops = 10;
         model.territories.get(enemyKing).troops = 0;
         model.troops.add(new GameModel.Troop(0,enemyKing,0,1,.99f)); model.update(.02f);
-        check(model.capturedKings(0) == 1 && model.teamMultiplier(0) == 1.5,"Capturing an enemy king activates a team-wide 1.5x multiplier");
+        check(model.capturedKings(0) == 1 && model.teamMultiplier(0) == 1.2,"Capturing an enemy king activates a team-wide 1.2x multiplier");
         double crown = model.territories.get(0).troops, normal = model.territories.get(1).troops;
         model.update(.1f);
-        check(Math.abs(model.territories.get(0).troops-crown-.33) < .0001,"King capture boosts the player's original king production");
-        check(Math.abs(model.territories.get(1).troops-normal-.2025) < .0001,"King capture boosts ordinary team territories too");
-        check(GameModel.restore(model.save()).teamMultiplier(0) == 1.5,"King growth bonus survives restore without replaying capture events");
+        check(Math.abs(model.territories.get(0).troops-crown-.264) < .0001,"King capture boosts the player's original king production");
+        check(Math.abs(model.territories.get(1).troops-normal-.162) < .0001,"King capture boosts ordinary team territories too");
+        check(GameModel.restore(model.save()).teamMultiplier(0) == 1.2,"King growth bonus survives restore without replaying capture events");
         model.territories.get(enemyKing).owner = 1;
         check(model.teamMultiplier(0) == 1,"Losing the captured king removes its bonus");
         model.territories.get(enemyKing).owner = 0;
-        check(model.teamMultiplier(0) == 1.5,"Recapturing the same king cannot repeatedly stack its bonus");
+        check(model.teamMultiplier(0) == 1.2,"Recapturing the same king cannot repeatedly stack its bonus");
         model.territories.get(4).owner = 0;
-        check(model.teamMultiplier(0) == 2.25,"Holding two different enemy kings multiplies team growth twice");
+        check(Math.abs(model.teamMultiplier(0)-1.44) < .00001,"Holding two different enemy kings multiplies team growth twice");
         model.territories.get(0).owner = 1;
-        check(model.teamMultiplier(1) == 1.5,"The same king rule applies fairly to rival teams");
+        check(model.teamMultiplier(1) == 1.2,"The same king rule applies fairly to rival teams");
         GameScene scene = new GameScene(new GameScene.Profile(),quiet(2),SILENT); scene.overlay = GameScene.NONE;
         scene.model.territories.get(enemyKing).troops = 0;
         scene.render(new GameModelTest.NullGraphics(),620); float[] position = scene.position(0);
         scene.model.troops.add(new GameModel.Troop(0,enemyKing,0,1,.99f)); scene.update(.02f); scene.update(.1f);
         GameModelTest.TextGraphics labels = new GameModelTest.TextGraphics(); scene.render(labels,620);
-        check(labels.text.contains("KING CAPTURED / GROWTH x1.5") && labels.text.contains("Team growth now x1.50"),"King capture shows the growth announcement above the board");
+        check(labels.text.contains("BOOST x1.20") && labels.text.contains("1 KINGS"),"King capture shows a compact boost indicator above the board");
         check(Arrays.equals(position,scene.position(0)),"Capture announcement does not resize or shift the battlefield");
         for (int i = 0; i < 32; i++) scene.update(.1f);
         labels = new GameModelTest.TextGraphics(); scene.render(labels,620);
-        check(!labels.text.contains("KING CAPTURED / GROWTH x1.5"),"Animated capture notice disappears automatically");
+        check(labels.text.contains("BOOST x1.20"),"Boost indicator stays visible after the capture animation finishes");
         scene = new GameScene(new GameScene.Profile(),quiet(0),SILENT); scene.overlay = GameScene.NONE;
         scene.model.territories.get(5).troops = 0;
         scene.model.troops.add(new GameModel.Troop(0,5,0,1,.99f)); scene.update(.02f);
@@ -153,7 +151,7 @@ final class V5RulesTest {
         click(scene,"tutorial_next"); click(scene,"tutorial_next");
         labels = new GameModelTest.TextGraphics(); scene.render(labels,700);
         check(!labels.text.contains("Scores and progress stay on this device, offline."),"Requested offline-progress line is removed from How to Play");
-        click(scene,"tutorial_prev"); click(scene,"tutorial_next"); click(scene,"tutorial_next");
+        click(scene,"tutorial_prev"); click(scene,"tutorial_next"); click(scene,"tutorial_next"); click(scene,"tutorial_next");
         check(Arrays.equals(original,scene.model.save()),"Tutorial demos and previous navigation leave the retained battle untouched");
         check(scene.profile.music,"Background music defaults on");
         click(scene,"settings"); click(scene,"music");

@@ -15,6 +15,7 @@ import javax.imageio.ImageIO;
 
 public final class RenderPreview implements GameScene.Graphics {
     private final Graphics2D g;
+    private java.awt.Shape previousClip;
     private RenderPreview(Graphics2D graphics) { g = graphics; }
     public static void main(String[] args) throws Exception {
         File output = new File(args.length == 0 ? "build/previews" : args[0]); output.mkdirs();
@@ -26,7 +27,7 @@ public final class RenderPreview implements GameScene.Graphics {
         render(menu,360,532,new File(output,"main-menu-small.png"));
         render(menu,420,900,new File(output,"main-menu-tall.png"));
         press(menu,"tutorial");
-        for (int step = 0; step < 4; step++) {
+        for (int step = 0; step < 5; step++) {
             render(menu,360,532,new File(output,"tutorial-"+(step+1)+".png"));
             render(menu,420,900,new File(output,"tutorial-tall-"+(step+1)+".png"));
             if (step == 1) {
@@ -38,6 +39,12 @@ public final class RenderPreview implements GameScene.Graphics {
                 press(menu,"demo_half"); render(menu,360,532,new File(output,"tutorial-half.png"));
                 press(menu,"demo_all"); render(menu,360,532,new File(output,"tutorial-all.png"));
                 press(menu,"demo_quarter");
+            }
+            if (step == 3) {
+                for (int i = 0; i < 4; i++) press(menu,"demo_capture");
+                render(menu,360,532,new File(output,"tutorial-four-kings.png"));
+                press(menu,"demo_capture"); render(menu,420,900,new File(output,"tutorial-five-kings.png"));
+                press(menu,"demo_lose");
             }
             press(menu,"tutorial_next");
         }
@@ -88,9 +95,13 @@ public final class RenderPreview implements GameScene.Graphics {
         for (int i = 0; i < 4; i++) scene.update(.1f);
         render(scene,360,532,new File(output,"king-capture-small.png"));
         render(scene,420,900,new File(output,"king-capture-tall.png"));
-        for (GameModel.Territory territory : scene.model.territories) if (territory.owner == 0) territory.troops = 999999;
+        for (GameModel.Territory territory : scene.model.territories) if (territory.owner == 0) territory.troops = GameModel.troopCap(territory);
         render(scene,360,532,new File(output,"large-counts-small.png"));
-        System.out.println("Rendered all 30 maps, five chapter pages/endings, and tutorial/menu states at compact and tall sizes.");
+        scene = new GameScene(profile,new GameModel(59,1,42),events); scene.overlay = GameScene.NONE;
+        render(scene,360,532,new File(output,"wide-map-fit.png"));
+        scene.cameraGesture(210,350,2,0,0); render(scene,360,532,new File(output,"wide-map-zoom.png"));
+        scene.cameraGesture(210,350,1,150,-120); render(scene,420,900,new File(output,"wide-map-pan.png"));
+        System.out.println("Rendered all 60 maps, ten chapter pages/endings, five tutorial steps, and zoom/pan states at compact and tall sizes.");
     }
 
     private static void press(GameScene scene,String id) {
@@ -113,6 +124,8 @@ public final class RenderPreview implements GameScene.Graphics {
     }
 
     private void color(int color) { g.setColor(new Color(color,true)); }
+    public void clip(float x,float y,float width,float height) { previousClip = g.getClip(); g.clip(new java.awt.geom.Rectangle2D.Float(x,y,width,height)); }
+    public void unclip() { g.setClip(previousClip); }
     public void rect(float x,float y,float w,float h,float radius,int color) {
         color(color); g.fill(new RoundRectangle2D.Float(x,y,w,h,radius*2,radius*2));
     }

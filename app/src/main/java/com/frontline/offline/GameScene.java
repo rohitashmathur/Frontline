@@ -9,6 +9,8 @@ public final class GameScene {
         void line(float x1, float y1, float x2, float y2, float width, int color);
         void polygon(float[] points, int fill, int stroke, float strokeWidth);
         void text(String text, float x, float baseline, float size, int color, boolean bold, int align);
+        default void clip(float x, float y, float width, float height) {}
+        default void unclip() {}
     }
     public interface Events { void changed(); void cue(int kind); }
     public static final class Profile {
@@ -29,7 +31,7 @@ public final class GameScene {
         SPLASH = 5, MENU = 6, TUTORIAL = 7;
     public static final int BACKGROUND = 0xFF17191B, PANEL = 0xFF232629;
     public static final int WHITE = 0xFFF0F7F7, MUTED = 0xFFA2ABA9, BORDER = 0xFF41494A;
-    public static final int[] COLORS = {0xFF5DE0BA, 0xFFFF816C, 0xFFF6D477, 0xFFAC9EEF};
+    public static final int[] COLORS = {0xFF5DE0BA, 0xFFFF816C, 0xFFF6D477, 0xFFAC9EEF, 0xFF65B9F2, 0xFFED99BF};
     public GameModel model;
     public final Profile profile;
     public int overlay = SPLASH;
@@ -42,7 +44,10 @@ public final class GameScene {
     private int tutorialStep;
     private float splashElapsed, kingBanner, resultDelay;
     private double tutorialFraction = .25;
+    private int tutorialKings;
     private float height = 780, boardScale, boardX, boardY, pointerX, pointerY;
+    private float zoom = 1, panX, panY, fitScale, mapWidth, mapHeight;
+    private boolean panning;
     private Button pressed;
 
     private static final class Button {
@@ -78,7 +83,7 @@ public final class GameScene {
         int oldCaptures = model.captures;
         int kings = model.capturedKings(GameModel.PLAYER);
         model.update(dt);
-        if (model.capturedKings(GameModel.PLAYER) > kings) kingBanner = 3;
+        if (model.capturedKings(GameModel.PLAYER) != kings) kingBanner = 2.4f;
         if (model.captures != oldCaptures) events.cue(1);
         if (model.outcome != GameModel.PLAYING && !resultRecorded) {
             resultRecorded = true;
@@ -115,32 +120,22 @@ public final class GameScene {
         addIcon(g, "pause", "Pause", 274, 19, overlay == NONE);
         addIcon(g, "restart", "Restart Round", 322, 19, false);
         addIcon(g, "settings", "Settings", 370, 19, false);
-        g.text(String.format(java.util.Locale.US, "CH %02d / SECTOR %02d OF %02d", Campaign.chapterIndex(model.levelIndex)+1,
-            model.levelIndex+1,GameModel.LEVELS.length), 23, 89, 11, MUTED, true, 0);
-        g.text(model.level().name, 22, 119, 22, WHITE, true, 0);
-        g.text(time(model.elapsed), 397, 118, 20, WHITE, false, 2);
+        g.text(String.format(java.util.Locale.US,"%02d / ",model.levelIndex+1)+model.level().name,22,82,17,WHITE,true,0);
+        g.text(time(model.elapsed),397,82,17,WHITE,false,2);
         float x = 22;
         for (int owner = -1; owner <= model.level().opponents; owner++) {
             float width = 376f * model.owned(owner) / model.territories.size();
-            if (width > 0) g.rect(x, 142, width, 6, 0, owner == -1 ? BORDER : armyColor(owner));
+            if (width > 0) g.rect(x,100,width,18,0,owner == -1 ? BORDER : armyColor(owner));
             x += width;
         }
-        if (kingBanner > 0) drawKingBanner(g);
-        else {
-            g.circle(27, 171, 4, COLORS[0]);
-            g.text("YOU  " + model.owned(0)+(model.capturedKings(0) > 0 ? " / x"+multiplier(model.teamMultiplier(0)) : ""), 39, 175, 11, WHITE, true, 0);
-            int enemyCount = 0;
-            for (int owner = 1; owner <= model.level().opponents; owner++) enemyCount += model.owned(owner);
-            g.circle(176, 171, 4, armyColor(1));
-            g.text("RIVALS  " + enemyCount, 188, 175, 11, MUTED, true, 0);
-            g.text(GameModel.DIFFICULTIES[model.difficulty], 397, 175, 11, MUTED, false, 2);
-            for (int owner = 1; owner <= model.level().opponents; owner++) {
-                float legendX = 22+(owner-1)*125;
-                int count = model.owned(owner);
-                g.circle(legendX+5,190,3,armyColor(owner));
-                g.text(Campaign.FACTIONS[model.level().faction(owner)]+" "+count,legendX+13,194,10,count > 0 ? WHITE : MUTED,false,0);
-            }
+        for (int owner = 0; owner <= model.level().opponents; owner++) {
+            float lx = 22+(owner%3)*125, ly = 135+(owner/3)*20;
+            g.circle(lx+4,ly-4,3.5f,armyColor(owner));
+            String percentage = Math.round(100f*model.owned(owner)/model.territories.size())+"%";
+            String label = Campaign.SHORT_NAMES[model.level().faction(owner)]+" "+(model.resigned[owner] ? "OUT" : percentage);
+            g.text(label,lx+13,ly,11,model.owned(owner) > 0 ? WHITE : MUTED,owner == 0,0);
         }
+        drawKingBanner(g);
         layoutBoard();
         drawBoard(g);
         drawFooter(g);
@@ -160,10 +155,34 @@ public final class GameScene {
             maxX = Math.max(maxX, territory.x + .866f);
             maxY = Math.max(maxY, territory.y + 1);
         }
-        float top = 205, bottom = height - 169;
-        boardScale = Math.min(66, Math.min(374 / (maxX - minX), (bottom - top) / maxY));
-        boardX = (420 - (maxX - minX) * boardScale) / 2 - minX * boardScale;
-        boardY = top + (bottom - top - maxY * boardScale) / 2;
+        float top = boardTop(), bottom = boardBottom();
+        mapWidth = maxX-minX; mapHeight = maxY;
+        fitScale = Math.min(66,Math.min(374/mapWidth,(bottom-top)/mapHeight));
+        boardScale = fitScale*zoom;
+        clampCamera();
+        boardX = (420-mapWidth*boardScale)/2-minX*boardScale+panX;
+        boardY = top+(bottom-top-mapHeight*boardScale)/2+panY;
+    }
+
+    private float boardTop() { return 204; }
+    private float boardBottom() { return height-149; }
+
+    private void clampCamera() {
+        float maxX = Math.max(0,(mapWidth*boardScale-374)/2);
+        float maxY = Math.max(0,(mapHeight*boardScale-(boardBottom()-boardTop()))/2);
+        panX = Math.max(-maxX,Math.min(maxX,panX));
+        panY = Math.max(-maxY,Math.min(maxY,panY));
+    }
+
+    public void cameraGesture(float x,float y,float factor,float dx,float dy) {
+        if (overlay != NONE || !Float.isFinite(factor) || factor <= 0 || !Float.isFinite(x) || !Float.isFinite(y)
+            || !Float.isFinite(dx) || !Float.isFinite(dy)) return;
+        cancel();
+        float next = Math.max(1,Math.min(3,zoom*factor)), ratio = next/zoom;
+        float centerY = (boardTop()+boardBottom())/2;
+        panX = x-210-(x-210-panX)*ratio+dx;
+        panY = y-centerY-(y-centerY-panY)*ratio+dy;
+        zoom = next; layoutBoard();
     }
 
     private float cx(GameModel.Territory territory) { return boardX + territory.x * boardScale; }
@@ -173,22 +192,23 @@ public final class GameScene {
     private static String multiplier(double value) { return String.format(java.util.Locale.US,"%.2f",value); }
 
     private void drawKingBanner(Graphics g) {
-        float fade = Math.min(1,Math.min(kingBanner/.4f,(3-kingBanner)/.25f));
-        float y = 157+(1-fade)*7;
-        int alpha = (int)(fade*255);
-        g.rect(22,y,376,40,4,(alpha<<24)|(PANEL&0xFFFFFF));
-        int color = (alpha<<24)|(COLORS[2]&0xFFFFFF);
-        float pulse = 1+(float)Math.sin((3-kingBanner)*7)*.08f;
-        float x = 42, cy = y+20, r = 9*pulse;
+        float y = 165;
+        float pulse = kingBanner > 0 ? 1+(float)Math.sin((2.4f-kingBanner)*9)*.11f : 1;
+        int color = model.capturedKings(0) > 0 ? COLORS[2] : MUTED;
+        g.rect(22,y,376,31,4,kingBanner > 0 ? mix(PANEL,color,.12f+kingBanner*.05f) : PANEL);
+        float x = 39, cy = y+16, r = 8*pulse;
         g.polygon(new float[] {x-r,cy+5,x-r,cy-6,x-r*.45f,cy-1,x,cy-8,x+r*.45f,cy-1,x+r,cy-6,x+r,cy+5},color,0,0);
-        g.text("KING CAPTURED / GROWTH x1.5",62,y+16,12,color,true,0);
-        g.text("Team growth now x"+multiplier(model.teamMultiplier(0)),62,y+32,11,(alpha<<24)|(WHITE&0xFFFFFF),false,0);
+        g.text("BOOST x"+multiplier(model.teamMultiplier(0)),57,y+21,14,color,true,0);
+        g.text(model.capturedKings(0)+" KINGS",235,y+21,11,WHITE,true,1);
+        g.text(GameModel.DIFFICULTIES[model.difficulty],385,y+21,11,MUTED,false,2);
     }
 
     private void drawBoard(Graphics g) {
+        g.clip(8,boardTop(),404,boardBottom()-boardTop());
         int aimed = selected < 0 ? -1 : territoryAt(pointerX, pointerY);
         for (GameModel.Territory territory : model.territories) {
             float x = cx(territory), y = cy(territory), radius = boardScale * .94f;
+            if (x+radius < 8 || x-radius > 412 || y+radius < boardTop() || y-radius > boardBottom()) continue;
             int color = territory.owner == -1 ? BORDER : armyColor(territory.owner);
             g.polygon(hex(x, y, radius), mix(BACKGROUND, color, territory.owner == -1 ? .42f : .29f),
                 selected == territory.id || aimed == territory.id ? WHITE : mix(BACKGROUND, color, .75f),
@@ -198,7 +218,7 @@ public final class GameScene {
             g.circle(x, y, node, territory.owner == -1 ? 0xFF2C3233 : mix(BACKGROUND, color, .12f));
             String count = Integer.toString(territory.count());
             float size = Math.min(20,boardScale*.45f)*Math.min(1,2.5f/count.length());
-            g.text(count,x,y+size*.3f,size,WHITE,true,1);
+            if (x >= 20 && x <= 400) g.text(count,x,y+size*.3f,size,WHITE,true,1);
             if (territory.capital) {
                 float baseline = y - node - 8;
                 g.polygon(new float[] {x-7,baseline,x-7,baseline-8,x-3,baseline-4,x,baseline-10,x+3,baseline-4,x+7,baseline-8,x+7,baseline}, color, 0, 0);
@@ -237,9 +257,10 @@ public final class GameScene {
             float dx = (float) Math.cos(angle), dy = (float) Math.sin(angle);
             g.polygon(new float[] {pointerX,pointerY,pointerX-dx*12-dy*6,pointerY-dy*12+dx*6,
                 pointerX-dx*12+dy*6,pointerY-dy*12-dx*6}, WHITE, 0, 0);
-            g.text(Integer.toString((int) (source.count() * fraction)), (cx(source)+pointerX)/2,
+            g.text(Integer.toString((int) (source.count() * fraction)),Math.max(24,Math.min(396,(cx(source)+pointerX)/2)),
                 (cy(source)+pointerY)/2-10, 15, WHITE, true, 1);
         }
+        g.unclip();
     }
 
     private void drawFooter(Graphics g) {
@@ -253,8 +274,24 @@ public final class GameScene {
         button(g, "half", "50%", 263, top+39, 64, 48, fraction == .5, false);
         button(g, "all", "100%", 333, top+39, 64, 48, fraction == 1, false);
         g.text("BEST  " + profile.best[model.levelIndex], 22, height-22, 11, MUTED, false, 0);
-        g.circle(342, height-26, 3, COLORS[0]);
-        g.text("OFFLINE", 397, height-22, 10, MUTED, true, 2);
+        cameraButton(g,"zoom_out","Zoom Out",254,height-48);
+        cameraButton(g,"fit_board","Fit Battlefield",304,height-48);
+        cameraButton(g,"zoom_in","Zoom In",354,height-48);
+    }
+
+    private void cameraButton(Graphics g,String id,String label,float x,float y) {
+        buttons.add(new Button(id,label,x,y,44,40));
+        g.rect(x,y,44,40,4,BACKGROUND);
+        float cx = x+22, cy = y+20;
+        if (id.equals("fit_board")) {
+            for (int sx : new int[] {-1,1}) for (int sy : new int[] {-1,1}) {
+                g.line(cx+sx*9,cy+sy*9,cx+sx*3,cy+sy*9,1.8f,WHITE);
+                g.line(cx+sx*9,cy+sy*9,cx+sx*9,cy+sy*3,1.8f,WHITE);
+            }
+        } else {
+            g.line(cx-8,cy,cx+8,cy,2,WHITE);
+            if (id.equals("zoom_in")) g.line(cx,cy-8,cx,cy+8,2,WHITE);
+        }
     }
 
     private void drawSplash(Graphics g) {
@@ -289,9 +326,9 @@ public final class GameScene {
     }
 
     private void drawTutorial(Graphics g) {
-        String[] headings = {"Claim Territory", "Send Troops", "Choose Your Army", "Win and Advance"};
+        String[] headings = {"Claim Territory", "Send Troops", "Choose Your Army", "King Boost", "Win and Advance"};
         g.text("HOW TO PLAY", 30, 43, 11, COLORS[0], true, 0);
-        g.text((tutorialStep+1)+" / 4", 390, 43, 12, MUTED, true, 2);
+        g.text((tutorialStep+1)+" / 5",390,43,12,MUTED,true,2);
         g.text(headings[tutorialStep], 30, 95, 27, WHITE, true, 0);
         float y = tutorialY();
         if (tutorialStep == 0) {
@@ -301,7 +338,7 @@ public final class GameScene {
             g.text("YOU", 92, y+80, 11, COLORS[0], true, 1);
             g.text("NEUTRAL", 210, y+80, 11, MUTED, true, 1);
             g.text("RIVAL", 328, y+80, 11, COLORS[1], true, 1);
-            tutorialCopy(g,"Green territories are yours. They produce troops.","King territories grow faster than ordinary ones.","Each enemy king held boosts team growth by 1.5x.");
+            tutorialCopy(g,"Green territories are yours. They produce troops.","King territories grow faster than ordinary ones.","Troop limits: ordinary tiles 100, king tiles 125.");
         } else if (tutorialStep == 1) {
             demoTerritory(g, 110, y, practiceDone ? 20 : 40, COLORS[0], false);
             demoTerritory(g, 310, y, practiceDone ? 12 : 8, practiceDone ? COLORS[0] : BORDER, false);
@@ -327,16 +364,26 @@ public final class GameScene {
             }
             tutorialCopy(g,"Choose 25%, 50%, or 100% before you swipe.",
                 (int)(tutorialFraction*100)+"% of 32 sends "+sent+" and leaves "+(32-sent)+" to defend.","Amounts round down. At least 1 troop must be sent.");
+        } else if (tutorialStep == 3) {
+            demoTerritory(g,92,y,125,COLORS[0],true);
+            demoTerritory(g,210,y,100,COLORS[0],false);
+            demoTerritory(g,328,y,75,tutorialKings > 0 ? COLORS[0] : COLORS[1],true);
+            double boost = tutorialKings < 4 ? Math.pow(1.2,tutorialKings) : 3*Math.pow(1.2,tutorialKings-4);
+            g.text("BOOST x"+multiplier(boost),210,y+77,18,COLORS[2],true,1);
+            button(g,"demo_capture","Capture King",32,y+93,173,42,true,true);
+            button(g,"demo_lose","Lose King",215,y+93,173,42,false,true);
+            tutorialCopy(g,"Enemy kings held boost growth across your team.","1: x1.2 / 2: x1.44 / 3: x1.73 / 4: x3 / 5: x3.6",
+                "Losing a king reduces the boost. Your own is excluded.");
         } else {
             for (int i = 0; i < 3; i++) star(g, 172+i*38, y-20, 14, COLORS[2]);
             demoTerritory(g, 130, y+55, 42, COLORS[0], true);
             demoTerritory(g, 290, y+55, 18, COLORS[0], false);
-            tutorialCopy(g,"Eliminate every rival territory and moving army.","Winning clears this sector and unlocks the next.","All your tiles at 99? Troops can grow beyond 99.");
+            tutorialCopy(g,"Eliminate rivals or hold over 90% for 10 seconds.","Rivals concede only when unable to recapture a tile.","Winning clears this sector and unlocks the next.");
         }
-        for (int i = 0; i < 4; i++) g.circle(186+i*16,height-160,3.5f,i == tutorialStep ? COLORS[0] : BORDER);
+        for (int i = 0; i < 5; i++) g.circle(178+i*16,height-160,3.5f,i == tutorialStep ? COLORS[0] : BORDER);
         boolean ready = tutorialStep != 1 || practiceDone;
         pageArrow(g,"tutorial_prev","Previous Step",52,height-132,false,tutorialStep > 0);
-        if (ready) button(g,"tutorial_next",tutorialStep == 3 ? tutorialStartsBattle ? "Start Battle" : "Done" : "Next",118,height-132,250,48,true,true);
+        if (ready) button(g,"tutorial_next",tutorialStep == 4 ? tutorialStartsBattle ? "Start Battle" : "Done" : "Next",118,height-132,250,48,true,true);
         else {
             g.rect(118,height-132,250,48,6,PANEL);
             g.text("Swipe above to continue",243,height-103,13,MUTED,true,1);
@@ -401,8 +448,9 @@ public final class GameScene {
         g.text(String.format(java.util.Locale.US,"CHAPTER %02d / %02d",sectorPage+1,Campaign.CHAPTERS.length),22,77,11,MUTED,true,0);
         g.text(chapter.name,22,109,27,WHITE,true,0);
         if (chapter.rulerFaction == 0) {
-            g.text("VOSS / SOL / VEIL",22,139,11,accent,true,0);
-            for (int faction = 1; faction <= 3; faction++) factionEmblem(g,324+(faction-1)*29,103,26,faction);
+            g.text(sectorPage < 5 ? "VOSS / SOL / VEIL" : "FIVE RIVAL RULERS",22,139,11,accent,true,0);
+            int count = sectorPage < 5 ? 3 : 5;
+            for (int faction = 1; faction <= count; faction++) factionEmblem(g,398-(count-faction)*27-13,103,24,faction);
         } else {
             g.text(Campaign.RULERS[chapter.rulerFaction]+" / "+Campaign.FACTIONS[chapter.rulerFaction],22,139,11,accent,true,0);
             factionEmblem(g,367,100,50,chapter.rulerFaction);
@@ -460,6 +508,15 @@ public final class GameScene {
         } else if (faction == 2) {
             g.polygon(new float[] {x,y-r*.55f,x+r*.38f,y,x,y+r*.55f,x-r*.38f,y},0,color,2);
             g.line(x-r*.5f,y,x+r*.5f,y,1.5f,color);
+        } else if (faction == 4) {
+            g.polygon(new float[] {x-r*.42f,y-r*.5f,x+r*.42f,y-r*.5f,x+r*.42f,y+r*.25f,x,y+r*.55f,x-r*.42f,y+r*.25f},0,color,2);
+            g.line(x,y-r*.3f,x,y+r*.3f,2,color);
+        } else if (faction == 5) {
+            for (int i = 0; i < 3; i++) {
+                double angle = i*Math.PI/3;
+                float dx = (float)Math.cos(angle)*r*.55f, dy = (float)Math.sin(angle)*r*.55f;
+                g.line(x-dx,y-dy,x+dx,y+dy,2,color);
+            }
         } else {
             g.circle(x,y,r*.43f,color); g.circle(x+r*.17f,y-r*.1f,r*.34f,BACKGROUND);
             g.circle(x-r*.15f,y+r*.05f,r*.08f,color);
@@ -494,6 +551,7 @@ public final class GameScene {
         if (won) for (int i = 0; i < 3; i++) star(g, 173+i*37, y+84, 13, i < model.stars() ? COLORS[2] : BORDER);
         else g.text("Regroup. Try a new approach.", 210, y+86, 13, MUTED, false, 1);
         if (chapterWon) g.text(campaignWon ? "THE FRONTIER IS UNITED" : Campaign.chapter(model.levelIndex+1).name+" unlocked",210,y+111,11,COLORS[0],true,1);
+        else if (won) for (boolean surrendered : model.resigned) if (surrendered) { g.text("RIVAL SURRENDER",210,y+111,11,COLORS[2],true,1); break; }
         g.text(won ? "SCORE" : "ARMY DEPLOYED", 210, y+130, 11, MUTED, true, 1);
         g.text(Integer.toString(won ? model.score() : model.unitsSent), 210, y+175, 42, won ? COLORS[0] : COLORS[1], true, 1);
         g.text("TIME", 117, y+212, 10, MUTED, true, 1);
@@ -541,7 +599,7 @@ public final class GameScene {
 
     public void down(float x, float y) {
         pressed = null; selected = -1;
-        practiceDragging = false;
+        practiceDragging = false; panning = false;
         for (Button button : buttons) if (button.contains(x,y)) { pressed = button; return; }
         if (overlay == TUTORIAL && tutorialStep == 1 && !practiceDone && Math.hypot(x-110,y-tutorialY()) <= 66) {
             practiceDragging = true; pointerX = x; pointerY = y; return;
@@ -550,10 +608,15 @@ public final class GameScene {
         int id = territoryAt(x,y);
         if (id >= 0 && model.territories.get(id).owner == GameModel.PLAYER) {
             selected = id; pointerX = x; pointerY = y;
+        } else if (y >= boardTop() && y <= boardBottom() && zoom > 1) {
+            panning = true; pointerX = x; pointerY = y;
         }
     }
 
-    public void move(float x, float y) { pointerX = x; pointerY = y; }
+    public void move(float x, float y) {
+        if (panning) { panX += x-pointerX; panY += y-pointerY; layoutBoard(); }
+        pointerX = x; pointerY = y;
+    }
 
     public void up(float x, float y) {
         if (pressed != null) {
@@ -567,10 +630,10 @@ public final class GameScene {
             if (target >= 0 && model.territories.get(selected).owner == GameModel.PLAYER
                 && model.launch(selected,target,fraction) > 0) events.cue(0);
         }
-        selected = -1; practiceDragging = false;
+        selected = -1; practiceDragging = false; panning = false;
     }
 
-    public void cancel() { selected = -1; pressed = null; practiceDragging = false; }
+    public void cancel() { selected = -1; pressed = null; practiceDragging = false; panning = false; }
     public String pressedLabel() { return pressed == null ? null : pressed.label; }
 
     public void back() {
@@ -601,8 +664,10 @@ public final class GameScene {
         else if (id.equals("demo_quarter")) tutorialFraction = .25;
         else if (id.equals("demo_half")) tutorialFraction = .5;
         else if (id.equals("demo_all")) tutorialFraction = 1;
+        else if (id.equals("demo_capture")) tutorialKings = Math.min(5,tutorialKings+1);
+        else if (id.equals("demo_lose")) tutorialKings = Math.max(0,tutorialKings-1);
         else if (id.equals("tutorial_next")) {
-            if (tutorialStep == 3) finishTutorial();
+            if (tutorialStep == 4) finishTutorial();
             else if (tutorialStep != 1 || practiceDone) tutorialStep++;
         }
         else if (id.equals("tutorial_skip")) finishTutorial();
@@ -617,6 +682,9 @@ public final class GameScene {
         else if (id.equals("quarter")) fraction = .25;
         else if (id.equals("half")) fraction = .5;
         else if (id.equals("all")) fraction = 1;
+        else if (id.equals("zoom_in")) cameraGesture(210,(boardTop()+boardBottom())/2,1.25f,0,0);
+        else if (id.equals("zoom_out")) cameraGesture(210,(boardTop()+boardBottom())/2,.8f,0,0);
+        else if (id.equals("fit_board")) { zoom = 1; panX = panY = 0; layoutBoard(); }
         else if (id.equals("sound")) profile.sound = !profile.sound;
         else if (id.equals("music")) profile.music = !profile.music;
         else if (id.equals("haptics")) profile.haptics = !profile.haptics;
@@ -633,11 +701,11 @@ public final class GameScene {
     public void start(int level) {
         model = new GameModel(level, profile.difficulty, System.nanoTime());
         profile.selectedSector = level; hasBattle = true;
-        resultRecorded = false; kingBanner = 0; resultDelay = 0; overlay = NONE; cancel();
+        resultRecorded = false; kingBanner = 0; resultDelay = 0; zoom = 1; panX = panY = 0; overlay = NONE; cancel();
     }
 
     private void openTutorial(boolean startsBattle) {
-        cancel(); tutorialStep = 0; practiceDone = false; tutorialFraction = .25;
+        cancel(); tutorialStep = 0; practiceDone = false; tutorialFraction = .25; tutorialKings = 0;
         tutorialStartsBattle = startsBattle; overlay = TUTORIAL;
     }
 
@@ -650,7 +718,7 @@ public final class GameScene {
     public boolean needsAnimation() { return overlay == NONE || overlay == SPLASH; }
 
     private int territoryAt(float x, float y) {
-        if (y < 190 || y > height-150 || x < 8 || x > 412) return -1;
+        if (y < boardTop()-7 || y > boardBottom()+8 || x < 8 || x > 412) return -1;
         for (GameModel.Territory territory : model.territories) {
             if (insideHex(x,y,cx(territory),cy(territory),boardScale*.95f)) return territory.id;
         }

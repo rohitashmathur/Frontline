@@ -38,9 +38,38 @@ public final class VictoryFixture {
                 model.troops.add(new GameModel.Troop(0,model.territories.size()-1,0,1,.8f));
                 setting(document,"int","selected-sector","2");
             } else if (mode.equals("--overflow")) {
-                model = new GameModel(0,1,7); model.territories.get(0).troops = 99;
-                model.territories.get(1).owner = 0; model.territories.get(1).troops = 99;
+                model = new GameModel(0,1,7); model.territories.get(0).troops = 125;
+                model.territories.get(1).owner = 0; model.territories.get(1).troops = 100;
                 setting(document,"int","selected-sector","0");
+            } else if (mode.equals("--four-kings") || mode.equals("--five-kings")) {
+                model = new GameModel(36,1,7); int held = 0;
+                for (GameModel.Territory tile : model.territories) {
+                    if (tile.capital && tile.owner > 0 && held < (mode.equals("--four-kings") ? 4 : 5)) { tile.owner = 0; held++; }
+                }
+                model.territories.get(1).owner = 5;
+                setting(document,"int","selected-sector","36");
+            } else if (mode.equals("--resign")) {
+                model = new GameModel(1,1,7);
+                for (GameModel.Territory tile : model.territories) { tile.owner = 0; tile.troops = GameModel.troopCap(tile); }
+                model.territories.get(model.territories.size()-1).owner = 1;
+                model.territories.get(model.territories.size()-1).troops = 1;
+                java.lang.reflect.Field timer = GameModel.class.getDeclaredField("dominanceSeconds"); timer.setAccessible(true); timer.setFloat(model,9.5f);
+                setting(document,"int","selected-sector","1");
+            } else if (mode.equals("--large-map")) {
+                model = new GameModel(59,1,7);
+                setting(document,"int","selected-sector","59");
+                setting(document,"int","unlocked","59");
+            } else if (mode.equals("--v5")) {
+                for (int sector = 30; sector < GameModel.LEVELS.length; sector++) {
+                    remove(document,"best-"+sector); remove(document,"stars-"+sector); remove(document,"time-"+sector);
+                }
+                model = new GameModel(29,1,7); model.elapsed = 42; model.unitsSent = 20;
+                model.territories.get(0).troops = 2500; model.territories.get(1).troops = 500;
+                GameModel.Troop convoy = new GameModel.Troop(0,1,0,4,.25f); convoy.units = 1100; model.troops.add(convoy);
+                setting(document,"int","best-29","2700"); setting(document,"int","stars-29","3"); setting(document,"float","time-29","90");
+                setting(document,"int","unlocked","29"); setting(document,"int","selected-sector","29");
+                setting(document,"int","difficulty","1"); setting(document,"int","wins","30");
+                setting(document,"boolean","music","false"); setting(document,"boolean","tutorial-seen","true");
             } else if (mode.equals("--legacy")) {
                 model = new GameModel(5,1,7); model.outcome = GameModel.WON;
                 for (GameModel.Territory territory : model.territories) if (territory.owner > 0) territory.owner = 0;
@@ -62,7 +91,7 @@ public final class VictoryFixture {
                 remove(document,"music");
             } else if (mode.equals("--campaign")) {
                 model = new GameModel(12,1,7);
-                setting(document,"int","unlocked","29"); setting(document,"int","selected-sector","12");
+                setting(document,"int","unlocked","59"); setting(document,"int","selected-sector","12");
                 setting(document,"int","difficulty","1"); setting(document,"boolean","tutorial-seen","true");
             } else if (mode.equals("--ai")) {
                 model = new GameModel(0,1,7);
@@ -76,7 +105,8 @@ public final class VictoryFixture {
                 for (GameModel.Territory territory : model.territories) if (territory.owner > 0) territory.owner = 0;
                 model.troops.clear(); model.outcome = GameModel.PLAYING;
             }
-            entry.setTextContent(Base64.getEncoder().encodeToString(model.save()));
+            byte[] battle = mode.equals("--v5") ? LegacySave.encode(model,true) : mode.equals("--legacy") || mode.equals("--v4") ? LegacySave.encode(model,false) : model.save();
+            entry.setTextContent(Base64.getEncoder().encodeToString(battle));
             TransformerFactory.newInstance().newTransformer().transform(new DOMSource(document),new StreamResult(new File(args[1])));
             return;
         }

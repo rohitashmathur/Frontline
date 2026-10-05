@@ -13,7 +13,8 @@ public final class GameModelTest {
         productionAndSending(); captureAndReinforcement(); eliminationWithTroopsInFlight();
         savesAndCorruption(); touchAndProgression(); menusAndTutorial(); expandedTouchAndQuarter();
         crownProduction(); aiAttackBudgets(); aiDefenseAndTargets(); coordinatedAttacks(); campaignDataAndProgress(); campaignNavigation(); simulationStability();
-        checks += V5RulesTest.run();
+        checks += SharedRulesTest.run();
+        checks += V6RulesTest.run();
         System.out.println("PASS: " + checks + " checks across battle rules, saves, controls, story/progression, and "+GameModel.LEVELS.length+"-map simulations.");
     }
 
@@ -31,10 +32,10 @@ public final class GameModelTest {
         check(model.launch(1,0,1) == 0,"Neutral cannot dispatch");
         check(model.launch(0,0,1) == 0,"Self dispatch rejected");
         check(model.launch(0,1,Double.NaN) == 0,"Invalid dispatch rejected");
-        model.territories.get(0).troops = 99;
+        model.territories.get(0).troops = 125;
         model.territories.get(1).owner = 0; model.territories.get(1).troops = 20;
         model.update(.1f);
-        check(model.territories.get(0).troops == 99,"Production is capped");
+        check(model.territories.get(0).troops == 125,"King production is capped");
     }
 
     private static void captureAndReinforcement() {
@@ -130,7 +131,7 @@ public final class GameModelTest {
         check(scene.buttonPosition("tutorial_next") == null,"Tap on practice source is not a swipe");
         scene.down(110,225); scene.move(310,225); scene.up(310,225);
         check(scene.model.unitsSent == 0 && scene.model.elapsed == 0,"Tutorial practice does not modify real battle");
-        click(scene,"tutorial_next"); click(scene,"tutorial_next"); click(scene,"tutorial_next");
+        click(scene,"tutorial_next"); click(scene,"tutorial_next"); click(scene,"tutorial_next"); click(scene,"tutorial_next");
         check(profile.tutorialSeen && scene.hasBattle && scene.overlay == GameScene.NONE,"Tutorial completion starts chosen sector");
         scene.model.launch(0,1,.25);
         scene.pause(); click(scene,"menu");
@@ -252,10 +253,10 @@ public final class GameModelTest {
             check(restored.territories.get(0).capital && !restored.territories.get(1).capital,"Save restores crown identity");
             restored.territories.get(0).owner = 1; restored.territories.get(0).troops = 10;
             restored.update(.1f);
-            check(Math.abs(restored.territories.get(0).troops-10.33) < .0001,"Captured crown keeps its faster production and grants a team bonus");
-            model.territories.get(0).troops = 98.9; model.territories.get(1).troops = 98.9;
+            check(Math.abs(restored.territories.get(0).troops-10.264) < .0001,"Captured crown keeps its faster production and grants a team bonus");
+            model.territories.get(0).troops = 124.9; model.territories.get(1).troops = 99.9;
             model.update(.1f);
-            check(model.territories.get(0).troops == 99 && model.territories.get(1).troops == 99,"Both production types obey the same maximum");
+            check(model.territories.get(0).troops == 125 && model.territories.get(1).troops == 100,"King and ordinary production obey their distinct maxima");
         }
     }
 
@@ -382,7 +383,7 @@ public final class GameModelTest {
     }
 
     private static void campaignDataAndProgress() throws Exception {
-        check(GameModel.LEVELS.length == 30 && Campaign.CHAPTERS.length == 5,"Campaign has five chapters and thirty sectors");
+        check(GameModel.LEVELS.length == 60 && Campaign.CHAPTERS.length == 10,"Campaign has ten chapters and sixty sectors");
         java.util.Set<String> names = new java.util.HashSet<>(), layouts = new java.util.HashSet<>();
         for (int sector = 0; sector < GameModel.LEVELS.length; sector++) {
             GameModel.Level level = GameModel.LEVELS[sector];
@@ -413,15 +414,15 @@ public final class GameModelTest {
         GameScene.Profile unfinished = new GameScene.Profile(); unfinished.unlocked = 5;
         new GameScene(unfinished,null,SILENT);
         check(unfinished.unlocked == 5,"Reaching but not clearing old final sector does not unlock the next chapter");
-        for (int sector : new int[] {5,11,17,23,29}) {
+        for (int sector : new int[] {5,11,17,23,29,35,41,47,53,59}) {
             GameScene.Profile profile = new GameScene.Profile(); profile.unlocked = sector;
             GameScene scene = new GameScene(profile,null,SILENT); scene.start(sector);
             scene.model.outcome = GameModel.WON; scene.update(.01f);
-            check(profile.unlocked == Math.min(29,sector+1),"Chapter-ending victory unlocks the correct next sector without overflowing");
+            check(profile.unlocked == Math.min(59,sector+1),"Chapter-ending victory unlocks the correct next sector without overflowing");
             TextGraphics labels = new TextGraphics(); scene.render(labels,620);
-            check(labels.text.contains(sector == 29 ? "Campaign Complete" : "Chapter Secured"),"Chapter and final victories display the correct ending");
-            check((scene.buttonPosition("next") != null) == (sector < 29),"Final sector does not offer a nonexistent next level");
-            if (sector < 29) { click(scene,"next"); check(scene.model.levelIndex == sector+1,"Next Sector crosses chapter boundaries correctly"); }
+            check(labels.text.contains(sector == 59 ? "Campaign Complete" : "Chapter Secured"),"Chapter and final victories display the correct ending");
+            check((scene.buttonPosition("next") != null) == (sector < 59),"Final sector does not offer a nonexistent next level");
+            if (sector < 59) { click(scene,"next"); check(scene.model.levelIndex == sector+1,"Next Sector crosses chapter boundaries correctly"); }
         }
     }
 
@@ -430,23 +431,23 @@ public final class GameModelTest {
         GameScene scene = new GameScene(profile,new GameModel(0,1,7),SILENT); scene.back();
         byte[] before = scene.model.save(); click(scene,"sectors");
         java.util.Set<String> visible = new java.util.HashSet<>();
-        for (int chapter = 0; chapter < 5; chapter++) {
+        for (int chapter = 0; chapter < 10; chapter++) {
             TextGraphics labels = new TextGraphics(); scene.render(labels,620);
             check(labels.text.contains(Campaign.CHAPTERS[chapter].name) && labels.text.contains(Campaign.CHAPTERS[chapter].firstLine),"Each campaign page displays its chapter and story briefing");
             check((scene.buttonPosition("chapter_prev") != null) == (chapter > 0),"Previous chapter control respects first-page boundary");
-            check((scene.buttonPosition("chapter_next") != null) == (chapter < 4),"Next chapter control respects final-page boundary");
+            check((scene.buttonPosition("chapter_next") != null) == (chapter < 9),"Next chapter control respects final-page boundary");
             for (GameModel.Level level : GameModel.LEVELS) if (labels.text.contains(level.name)) visible.add(level.name);
             if (chapter > 0) check(scene.buttonPosition("level_"+(chapter*6)) == null,"Browsing a locked chapter does not unlock its sectors");
-            if (chapter < 4) click(scene,"chapter_next");
+            if (chapter < 9) click(scene,"chapter_next");
         }
-        check(visible.size() == 30,"All thirty sectors are reachable through chapter pages");
+        check(visible.size() == 60,"All sixty sectors are reachable through chapter pages");
         check(Arrays.equals(before,scene.model.save()) && profile.selectedSector == 0,"Chapter browsing freezes battle and preserves selected sector");
-        for (int i = 0; i < 4; i++) click(scene,"chapter_prev");
-        scene.back(); profile.unlocked = 29; profile.selectedSector = 29; click(scene,"sectors");
+        for (int i = 0; i < 9; i++) click(scene,"chapter_prev");
+        scene.back(); profile.unlocked = 59; profile.selectedSector = 59; click(scene,"sectors");
         scene.render(new NullGraphics(),620);
-        check(scene.buttonPosition("level_29") != null && scene.buttonPosition("level_0") == null,"Campaign opens at the selected sector's chapter");
-        click(scene,"level_29"); click(scene,"play");
-        check(scene.model.levelIndex == 29 && scene.overlay == GameScene.NONE,"Selecting final-sector row launches the final map");
+        check(scene.buttonPosition("level_59") != null && scene.buttonPosition("level_0") == null,"Campaign opens at the selected sector's chapter");
+        click(scene,"level_59"); click(scene,"play");
+        check(scene.model.levelIndex == 59 && scene.overlay == GameScene.NONE,"Selecting final-sector row launches the final map");
         GameModel.Territory source = null, target = null;
         for (GameModel.Territory territory : scene.model.territories) {
             if (territory.owner == 0) source = territory;
@@ -455,13 +456,13 @@ public final class GameModelTest {
         click(scene,"quarter");
         float[] a = scene.position(source.id), b = scene.position(target.id);
         scene.down(a[0],a[1]); scene.up(b[0],b[1]);
-        check(scene.model.unitsSent == 10,"Player can dispatch from a shifted starting location on a new map");
+        check(scene.model.unitsSent == 13,"Player can dispatch from a shifted starting location on a new map");
         for (int sector : new int[] {12,18,25}) {
             scene.start(sector);
             TextGraphics labels = new TextGraphics(); scene.render(labels,620);
             for (int owner = 1; owner <= scene.model.level().opponents; owner++) {
                 int faction = scene.model.level().faction(owner);
-                check(labels.text.contains(Campaign.FACTIONS[faction]+" 1"),"Battle legends identify every named rival faction");
+                check(labels.text.contains(Campaign.SHORT_NAMES[faction]+" "+Math.round(100f/scene.model.territories.size())+"%"),"Battle legends identify every named rival faction with integer coverage");
                 GameModel.Territory enemy = null;
                 for (GameModel.Territory territory : scene.model.territories) if (territory.owner == owner) enemy = territory;
                 float[] point = scene.position(enemy.id);
@@ -498,7 +499,7 @@ public final class GameModelTest {
                     }
                     model.update(.06f);
                     for (GameModel.Territory territory : model.territories) {
-                        if (!Double.isFinite(territory.troops) || territory.troops < 0 || territory.troops > GameModel.MAX_TROOPS)
+                        if (!Double.isFinite(territory.troops) || territory.troops < 0 || territory.troops > GameModel.troopCap(territory))
                             throw new AssertionError("Invalid army during simulation");
                     }
                     if (model.outcome != GameModel.PLAYING) break;

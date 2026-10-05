@@ -20,8 +20,9 @@ public final class DeviceControls {
         points.put("practice-to",new float[] {310,225});
         scene.down(110,225); scene.up(310,225); click(scene,"tutorial_next");
         collect(scene,"tutorial","demo_quarter","demo_half","demo_all");
+        click(scene,"tutorial_next"); collect(scene,"booster","demo_capture","demo_lose");
         click(scene,"tutorial_skip");
-        collect(scene,"battle","quarter","half","all","restart");
+        collect(scene,"battle","quarter","half","all","restart","zoom_in","zoom_out","fit_board");
         float[] from = scene.position(0), to = scene.position(1);
         float scale = (to[0]-from[0])/1.732f;
         points.put("swipe-from",new float[] {from[0]-.866f*scale-7,from[1]});
