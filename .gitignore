@@ -1,0 +1,35 @@
+.toolchain/
+build/
+local.properties
+.gradle/
+.idea/
+*.iml
+
+# Local credentials and signing material must never be committed.
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+*.p12
+*.pfx
+*.pem
+key.properties
+keystore.properties
+
+# Generated packages and workstation files.
+*.apk
+*.aab
+*.ipa
+*.log
+.DS_Store
+Thumbs.db
+
+# Future iOS and backend build output.
+DerivedData/
+Pods/
+*.xcuserstate
+xcuserdata/
+node_modules/
+.venv/
+__pycache__/
