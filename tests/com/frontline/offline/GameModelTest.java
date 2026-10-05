@@ -15,6 +15,11 @@ public final class GameModelTest {
         crownProduction(); aiAttackBudgets(); aiDefenseAndTargets(); coordinatedAttacks(); campaignDataAndProgress(); campaignNavigation(); simulationStability();
         checks += SharedRulesTest.run();
         checks += V6RulesTest.run();
+        checks += V7RulesTest.run();
+        checks += V10ModelTest.run();
+        checks += V10ChallengeTest.run();
+        checks += V10ProgressTest.run();
+        checks += V10SceneTest.run();
         System.out.println("PASS: " + checks + " checks across battle rules, saves, controls, story/progression, and "+GameModel.LEVELS.length+"-map simulations.");
     }
 
@@ -100,10 +105,11 @@ public final class GameModelTest {
         scene.back(); check(scene.overlay == GameScene.NONE,"Back resumes paused battle");
         scene.model.outcome = GameModel.WON; scene.update(.1f);
         check(profile.unlocked == 1 && profile.wins == 1,"Victory unlocks next sector");
-        check(profile.best[0] > 0 && profile.stars[0] == 3,"Score and stars recorded");
+        check(profile.progress.best[1][0] > 0 && profile.progress.stars[1][0] == 3,"Score and stars recorded by attempt difficulty");
         scene.update(.1f); check(profile.wins == 1,"Result is recorded only once");
         scene.render(new NullGraphics(),780);
         click(scene,"next");
+        click(scene,"begin_attempt"); click(scene,"tutorial_skip");
         check(scene.model.levelIndex == 1,"Next sector control launches unlocked map");
     }
 
@@ -122,7 +128,9 @@ public final class GameModelTest {
         check(scene.overlay == GameScene.SECTORS,"Tapping locked sector cannot start a battle");
         scene.back(); check(scene.overlay == GameScene.MENU,"Sector Back returns to menu");
         click(scene,"play");
-        check(scene.overlay == GameScene.TUTORIAL && !scene.hasBattle,"First Play starts tutorial before real battle");
+        check(scene.overlay == GameScene.BRIEFING && !scene.hasBattle,"New Attempt shows targets before a run");
+        click(scene,"begin_attempt");
+        check(scene.overlay == GameScene.TUTORIAL && scene.model.elapsed == 0,"First attempt starts with a paused practical tutorial");
         click(scene,"tutorial_next");
         scene.render(new NullGraphics(),700);
         check(scene.buttonPosition("tutorial_next") == null,"Practice step requires a successful swipe");
@@ -131,7 +139,9 @@ public final class GameModelTest {
         check(scene.buttonPosition("tutorial_next") == null,"Tap on practice source is not a swipe");
         scene.down(110,225); scene.move(310,225); scene.up(310,225);
         check(scene.model.unitsSent == 0 && scene.model.elapsed == 0,"Tutorial practice does not modify real battle");
-        click(scene,"tutorial_next"); click(scene,"tutorial_next"); click(scene,"tutorial_next"); click(scene,"tutorial_next");
+        click(scene,"tutorial_next"); click(scene,"demo_quarter"); click(scene,"demo_half"); click(scene,"demo_all");
+        scene.down(110,225); scene.up(310,225); click(scene,"tutorial_next");
+        click(scene,"demo_capture"); click(scene,"demo_lose"); click(scene,"tutorial_next"); click(scene,"tutorial_next");
         check(profile.tutorialSeen && scene.hasBattle && scene.overlay == GameScene.NONE,"Tutorial completion starts chosen sector");
         scene.model.launch(0,1,.25);
         scene.pause(); click(scene,"menu");
@@ -154,18 +164,19 @@ public final class GameModelTest {
         profile.unlocked = 2; profile.best[0] = 100; profile.stars[0] = 2;
         scene.overlay = GameScene.MENU; click(scene,"sectors");
         TextGraphics labels = new TextGraphics(); scene.render(labels,700);
-        check(labels.text.contains("Cleared  /  Best 100"),"Completed sectors explicitly show Cleared");
+        check(labels.text.contains("Cleared / No Normal record / Legacy 100"),"Completed historical sectors explicitly show Cleared and Legacy");
         check(labels.text.contains("Locked - clear Sector 03"),"Locked sectors explain their unlock requirement");
         click(scene,"level_2");
         check(profile.selectedSector == 2 && scene.overlay == GameScene.MENU,"Selecting sector updates menu selection");
         check(Arrays.equals(before,scene.model.save()),"Selecting a sector alone does not discard saved battle");
         click(scene,"play");
+        click(scene,"begin_attempt"); click(scene,"confirm_replace");
         check(scene.model.levelIndex == 2,"Play launches selected sector");
         scene.model.outcome = GameModel.LOST; scene.update(.1f); click(scene,"menu");
         scene.render(new NullGraphics(),700);
         check(scene.buttonPosition("resume") == null,"Finished battles do not offer Resume");
         GameScene first = new GameScene(new GameScene.Profile(),null,SILENT);
-        first.back(); click(first,"play"); click(first,"tutorial_skip");
+        first.back(); click(first,"play"); click(first,"begin_attempt"); click(first,"tutorial_skip");
         check(first.profile.tutorialSeen && first.overlay == GameScene.NONE,"First-time tutorial can be skipped");
     }
 
@@ -422,7 +433,7 @@ public final class GameModelTest {
             TextGraphics labels = new TextGraphics(); scene.render(labels,620);
             check(labels.text.contains(sector == 59 ? "Campaign Complete" : "Chapter Secured"),"Chapter and final victories display the correct ending");
             check((scene.buttonPosition("next") != null) == (sector < 59),"Final sector does not offer a nonexistent next level");
-            if (sector < 59) { click(scene,"next"); check(scene.model.levelIndex == sector+1,"Next Sector crosses chapter boundaries correctly"); }
+            if (sector < 59) { click(scene,"next"); click(scene,"begin_attempt"); check(scene.model.levelIndex == sector+1,"Next Sector crosses chapter boundaries correctly"); }
         }
     }
 
@@ -446,7 +457,7 @@ public final class GameModelTest {
         scene.back(); profile.unlocked = 59; profile.selectedSector = 59; click(scene,"sectors");
         scene.render(new NullGraphics(),620);
         check(scene.buttonPosition("level_59") != null && scene.buttonPosition("level_0") == null,"Campaign opens at the selected sector's chapter");
-        click(scene,"level_59"); click(scene,"play");
+        click(scene,"level_59"); click(scene,"play"); click(scene,"begin_attempt"); click(scene,"confirm_replace"); click(scene,"camera_ready");
         check(scene.model.levelIndex == 59 && scene.overlay == GameScene.NONE,"Selecting final-sector row launches the final map");
         GameModel.Territory source = null, target = null;
         for (GameModel.Territory territory : scene.model.territories) {

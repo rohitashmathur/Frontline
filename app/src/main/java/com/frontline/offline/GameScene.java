@@ -12,15 +12,36 @@ public final class GameScene {
         default void clip(float x, float y, float width, float height) {}
         default void unclip() {}
     }
-    public interface Events { void changed(); void cue(int kind); }
+    public interface Events {
+        void changed();
+        void cue(int kind);
+        default void unlockCodeRequested() {}
+        default void exportPlaytestRequested() {}
+        default long now() { return System.currentTimeMillis(); }
+    }
     public static final class Profile {
         public final int[] best = new int[GameModel.LEVELS.length];
         public final int[] stars = new int[GameModel.LEVELS.length];
         public final float[] times = new float[GameModel.LEVELS.length];
         public int unlocked, selectedSector, difficulty = 1, wins;
         public boolean sound = true, music = true, haptics = true, tutorialSeen;
-        public int totalScore() { int sum = 0; for (int score : best) sum += score; return sum; }
-        public boolean cleared(int sector) { return stars[sector] > 0 || best[sector] > 0; }
+        public boolean cameraGuideSeen;
+        public Progress progress = new Progress();
+        public PlaytestLog log = new PlaytestLog();
+        public int totalScore() {
+            int sum = 0;
+            for (int i = 0; i < best.length; i++) {
+                int highest = best[i];
+                for (int d = 0; d < 3; d++) highest = Math.max(highest,progress.best[d][i]);
+                sum += highest;
+            }
+            return sum;
+        }
+        public boolean cleared(int sector) {
+            if (stars[sector] > 0 || best[sector] > 0) return true;
+            for (int d = 0; d < 3; d++) if (progress.stars[d][sector] > 0) return true;
+            return false;
+        }
         public void reconcileProgress() {
             unlocked = Math.max(0,Math.min(best.length-1,unlocked));
             for (int i = 0; i < best.length-1; i++) if (cleared(i)) unlocked = Math.max(unlocked,i+1);
@@ -28,7 +49,8 @@ public final class GameScene {
         }
     }
     public static final int NONE = 0, PAUSE = 1, SECTORS = 2, SETTINGS = 3, RESULT = 4,
-        SPLASH = 5, MENU = 6, TUTORIAL = 7;
+        SPLASH = 5, MENU = 6, TUTORIAL = 7, BRIEFING = 8, CONFIRM = 9,
+        CHALLENGES = 10, DAILY = 11, MASTERY = 12, HELP = 13, CAMERA_HELP = 14;
     public static final int BACKGROUND = 0xFF17191B, PANEL = 0xFF232629;
     public static final int WHITE = 0xFFF0F7F7, MUTED = 0xFFA2ABA9, BORDER = 0xFF41494A;
     public static final int[] COLORS = {0xFF5DE0BA, 0xFFFF816C, 0xFFF6D477, 0xFFAC9EEF, 0xFF65B9F2, 0xFFED99BF};
@@ -42,6 +64,15 @@ public final class GameScene {
     private int previousOverlay = NONE, selected = -1, sectorPage;
     private boolean resultRecorded, tutorialStartsBattle, practiceDragging, practiceDone;
     private int tutorialStep;
+    private int fractionVisits, challengePage, helpReturn = MENU;
+    private boolean reinforcementDone, kingPracticeGain, kingPracticeLoss;
+    private int previewMode, previewSector, previewChallenge;
+    private String previewDate = "", confirmationReason = "";
+    private int confirmationReturn;
+    private Runnable confirmedAction;
+    private boolean improvedTime, improvedScore;
+    private int feedbackType, feedbackUnits;
+    private float feedbackTimer;
     private float splashElapsed, kingBanner, resultDelay;
     private double tutorialFraction = .25;
     private int tutorialKings;
@@ -74,6 +105,7 @@ public final class GameScene {
             return;
         }
         if (overlay != NONE) return;
+        feedbackTimer = Math.max(0,feedbackTimer-Math.max(0,dt));
         kingBanner = Math.max(0,kingBanner-Math.max(0,dt));
         if (resultDelay > 0) {
             resultDelay = Math.max(0,resultDelay-Math.max(0,dt));
@@ -83,18 +115,42 @@ public final class GameScene {
         int oldCaptures = model.captures;
         int kings = model.capturedKings(GameModel.PLAYER);
         model.update(dt);
+        for (GameModel.BattleEvent event : model.drainEvents()) {
+            if (event.type == GameModel.KING_GAIN_EVENT || event.type == GameModel.KING_LOSS_EVENT || event.type == GameModel.HOME_KING_LOSS_EVENT)
+                log(event.type == GameModel.KING_GAIN_EVENT ? "king_gain" : "king_loss","tile="+event.tile+";home="+(event.type == GameModel.HOME_KING_LOSS_EVENT));
+            int priority = feedbackPriority(event.type);
+            if (feedbackTimer == 0 || priority >= feedbackPriority(feedbackType)) {
+                feedbackUnits = event.type == feedbackType && feedbackTimer > 0 ? feedbackUnits+event.units : event.units;
+                feedbackType = event.type; feedbackTimer = 2.5f;
+            }
+        }
         if (model.capturedKings(GameModel.PLAYER) != kings) kingBanner = 2.4f;
         if (model.captures != oldCaptures) events.cue(1);
         if (model.outcome != GameModel.PLAYING && !resultRecorded) {
             resultRecorded = true;
             if (model.outcome == GameModel.WON) {
                 int index = model.levelIndex;
-                profile.best[index] = Math.max(profile.best[index], model.score());
-                profile.stars[index] = Math.max(profile.stars[index], model.stars());
-                if (profile.times[index] == 0 || model.elapsed < profile.times[index]) profile.times[index] = model.elapsed;
-                profile.unlocked = Math.max(profile.unlocked, Math.min(GameModel.LEVELS.length - 1, index + 1));
+                if (model.objectiveType != 0) {
+                    boolean catalogued = model.challengeId >= 0 && model.challengeId < Challenge.PRESETS.length;
+                    int before = model.dailyDate.isEmpty() ? catalogued ? profile.progress.challengeBest[model.difficulty][model.challengeId] : 0 : profile.progress.dailyBest(model.dailyDate);
+                    improvedScore = model.score() > before;
+                    float previous = model.dailyDate.isEmpty() ? catalogued ? profile.progress.challengeTimes[model.difficulty][model.challengeId] : 0 : profile.progress.dailyTime(model.dailyDate);
+                    improvedTime = previous == 0 || model.elapsed < previous;
+                    profile.progress.recordChallenge(model);
+                } else if (model.rulesVersion == 0) {
+                    improvedScore = model.score() > profile.best[index];
+                    improvedTime = profile.times[index] == 0 || model.elapsed < profile.times[index];
+                    profile.best[index] = Math.max(profile.best[index], model.score());
+                    profile.stars[index] = Math.max(profile.stars[index], model.stars());
+                    if (improvedTime) profile.times[index] = model.elapsed;
+                } else {
+                    improvedScore = model.score() > profile.progress.best[model.difficulty][index];
+                    improvedTime = profile.progress.recordCampaign(model);
+                }
+                if (model.objectiveType == 0) profile.unlocked = Math.max(profile.unlocked,Math.min(GameModel.LEVELS.length-1,index+1));
                 profile.wins++;
             }
+            log("attempt_result",model.outcome == GameModel.WON ? "won" : "lost");
             if (model.outcome == GameModel.WON && kingBanner > 0) resultDelay = 2.4f;
             else overlay = RESULT;
             events.cue(model.outcome == GameModel.WON ? 2 : 3);
@@ -108,6 +164,13 @@ public final class GameScene {
         if (overlay == SPLASH) { drawSplash(g); return; }
         if (overlay == TUTORIAL) { drawTutorial(g); return; }
         if (overlay == SECTORS) { drawSectors(g); return; }
+        if (overlay == BRIEFING) { drawBriefing(g); return; }
+        if (overlay == CHALLENGES) { drawChallenges(g); return; }
+        if (overlay == DAILY) { drawDaily(g); return; }
+        if (overlay == MASTERY) { drawMastery(g); return; }
+        if (overlay == HELP) { drawHelp(g); return; }
+        if (overlay == CONFIRM) { drawConfirmation(g); return; }
+        if (overlay == CAMERA_HELP) { drawCameraHelp(g); return; }
         if (overlay == MENU || overlay == SETTINGS && previousOverlay == MENU) {
             drawMenu(g);
             if (overlay == MENU) return;
@@ -130,12 +193,14 @@ public final class GameScene {
         }
         for (int owner = 0; owner <= model.level().opponents; owner++) {
             float lx = 22+(owner%3)*125, ly = 135+(owner/3)*20;
-            g.circle(lx+4,ly-4,3.5f,armyColor(owner));
+            factionMark(g,lx+4,ly-4,4,model.level().faction(owner),armyColor(owner));
             String percentage = Math.round(100f*model.owned(owner)/model.territories.size())+"%";
             String label = Campaign.SHORT_NAMES[model.level().faction(owner)]+" "+(model.resigned[owner] ? "OUT" : percentage);
             g.text(label,lx+13,ly,11,model.owned(owner) > 0 ? WHITE : MUTED,owner == 0,0);
         }
         drawKingBanner(g);
+        g.text(objectiveLabel(),22,214,11,model.objectiveType == 0 ? MUTED : COLORS[2],true,0);
+        if (feedbackTimer > 0) g.text(feedbackText(),22,232,11,WHITE,false,0);
         layoutBoard();
         drawBoard(g);
         drawFooter(g);
@@ -164,7 +229,7 @@ public final class GameScene {
         boardY = top+(bottom-top-mapHeight*boardScale)/2+panY;
     }
 
-    private float boardTop() { return 204; }
+    private float boardTop() { return 244; }
     private float boardBottom() { return height-149; }
 
     private void clampCamera() {
@@ -213,16 +278,25 @@ public final class GameScene {
             g.polygon(hex(x, y, radius), mix(BACKGROUND, color, territory.owner == -1 ? .42f : .29f),
                 selected == territory.id || aimed == territory.id ? WHITE : mix(BACKGROUND, color, .75f),
                 selected == territory.id || aimed == territory.id ? 2.7f : 1.2f);
+            if (profile.progress.theme == 1) g.circle(x,y,radius*.8f,0x143AAB8F);
+            if (profile.progress.theme == 2) {
+                g.line(x-radius*.55f,y+radius*.48f,x+radius*.55f,y+radius*.48f,1,0x665E8BA3);
+                g.line(x,y-radius*.7f,x,y-radius*.42f,1,0x665E8BA3);
+            }
             float node = Math.min(21, boardScale * .45f);
             g.circle(x, y, node + 2, color);
             g.circle(x, y, node, territory.owner == -1 ? 0xFF2C3233 : mix(BACKGROUND, color, .12f));
             String count = Integer.toString(territory.count());
             float size = Math.min(20,boardScale*.45f)*Math.min(1,2.5f/count.length());
             if (x >= 20 && x <= 400) g.text(count,x,y+size*.3f,size,WHITE,true,1);
+            if (territory.owner >= 0) factionMark(g,x,y+node+6,Math.min(5,boardScale*.13f),model.level().faction(territory.owner),color);
+            if (territory.count() >= GameModel.troopCap(territory)) g.text("MAX",x,y-node+1,7,WHITE,true,1);
+            if (territory.id == model.objectiveTarget && model.objectiveType == Challenge.HOLD_KING)
+                g.polygon(new float[] {x,y-radius,x+5,y-radius+6,x,y-radius+12,x-5,y-radius+6},COLORS[2],WHITE,1);
             if (territory.capital) {
                 float baseline = y - node - 8;
                 g.polygon(new float[] {x-7,baseline,x-7,baseline-8,x-3,baseline-4,x,baseline-10,x+3,baseline-4,x+7,baseline-8,x+7,baseline}, color, 0, 0);
-            } else if (territory.owner != -1 && boardScale > 34) {
+            } else if (territory.owner != -1 && boardScale > 34 && territory.count() < GameModel.troopCap(territory)) {
                 float progress = (float) (territory.troops - territory.count());
                 g.line(x-9, y+node+9, x+9, y+node+9, 2, mix(BACKGROUND,color,.35f));
                 g.line(x-9, y+node+9, x-9+18*progress, y+node+9, 2, color);
@@ -257,8 +331,12 @@ public final class GameScene {
             float dx = (float) Math.cos(angle), dy = (float) Math.sin(angle);
             g.polygon(new float[] {pointerX,pointerY,pointerX-dx*12-dy*6,pointerY-dy*12+dx*6,
                 pointerX-dx*12+dy*6,pointerY-dy*12-dx*6}, WHITE, 0, 0);
-            g.text(Integer.toString((int) (source.count() * fraction)),Math.max(24,Math.min(396,(cx(source)+pointerX)/2)),
-                (cy(source)+pointerY)/2-10, 15, WHITE, true, 1);
+            if (boardScale >= 36) {
+                float labelX = Math.max(24,Math.min(396,(cx(source)+pointerX)/2));
+                float labelY = Math.max(boardTop()+20,Math.min(boardBottom()-5,(cy(source)+pointerY)/2-10));
+                g.rect(labelX-15,labelY-16,30,20,3,BACKGROUND);
+                g.text(Integer.toString((int)(source.count()*fraction)),labelX,labelY,15,WHITE,true,1);
+            }
         }
         g.unclip();
     }
@@ -267,13 +345,18 @@ public final class GameScene {
         float top = height-139;
         g.rect(0, top, 420, 139, 0, PANEL);
         g.line(0, top, 420, top, 1, BORDER);
-        g.text("ARMY", 22, top+28, 10, MUTED, true, 0);
-        g.text(Integer.toString(model.army(0)), 22, top+61, 27, WHITE, true, 0);
+        GameModel.Territory source = selected < 0 ? null : model.territories.get(selected);
+        g.text(source == null ? "ARMY" : "TILE "+(source.id+1)+(source.count() >= GameModel.troopCap(source) ? " / MAX" : ""),22,top+28,10,MUTED,true,0);
+        g.text(Integer.toString(source == null ? model.army(0) : source.count()),22,top+61,27,WHITE,true,0);
         g.text("DEPLOY", 195, top+28, 10, MUTED, true, 0);
         button(g, "quarter", "25%", 193, top+39, 64, 48, fraction == .25, false);
         button(g, "half", "50%", 263, top+39, 64, 48, fraction == .5, false);
         button(g, "all", "100%", 333, top+39, 64, 48, fraction == 1, false);
-        g.text("BEST  " + profile.best[model.levelIndex], 22, height-22, 11, MUTED, false, 0);
+        if (source != null) {
+            int sent = (int)(source.count()*fraction);
+            boolean over = model.objectiveType == Challenge.BUDGET && model.unitsSent+sent > model.deploymentBudget;
+            g.text("SEND "+sent+" / LEFT "+(source.count()-sent)+(over ? " !" : ""),22,height-22,11,over ? COLORS[1] : WHITE,true,0);
+        } else g.text("3 STARS  "+time(model.level().parSeconds),22,height-22,11,MUTED,false,0);
         cameraButton(g,"zoom_out","Zoom Out",254,height-48);
         cameraButton(g,"fit_board","Fit Battlefield",304,height-48);
         cameraButton(g,"zoom_in","Zoom In",354,height-48);
@@ -303,22 +386,24 @@ public final class GameScene {
     }
 
     private void drawMenu(Graphics g) {
-        float top = (height-560)/2;
-        emblem(g, 210, top+55, 92);
-        g.text("FRONTLINE", 210, top+132, 30, WHITE, true, 1);
-        g.text(String.format(java.util.Locale.US,"CHAPTER %02d  /  ",Campaign.chapterIndex(profile.selectedSector)+1)
-            + Campaign.chapter(profile.selectedSector).name,210,top+156,11,COLORS[Campaign.chapter(profile.selectedSector).rulerFaction],true,1);
-        g.text(String.format(java.util.Locale.US, "SECTOR %02d  /  ", profile.selectedSector+1)
-            + GameModel.LEVELS[profile.selectedSector].name, 210, top+180, 13, MUTED, false, 1);
-        button(g, "play", "Play", 52, top+203, 316, 48, true, true);
-        float row = top+260;
-        if (hasBattle && model.outcome == GameModel.PLAYING) {
-            button(g, "resume", "Resume Sector " + String.format(java.util.Locale.US,"%02d",model.levelIndex+1), 52, row, 316, 48, false, true);
-            row += 57;
-        }
-        button(g, "sectors", "Select Sector", 52, row, 316, 48, false, true);
-        button(g, "tutorial", "How to Play", 52, row+57, 316, 48, false, true);
-        button(g, "settings", "Settings", 52, row+114, 316, 48, false, true);
+        float top = (height-570)/2;
+        emblem(g,80,top+45,72);
+        g.text("FRONTLINE",130,top+57,28,WHITE,true,0);
+        g.text(Campaign.chapter(profile.selectedSector).name,52,top+94,13,COLORS[Campaign.chapter(profile.selectedSector).rulerFaction],true,0);
+        g.text("SECTOR "+String.format(java.util.Locale.US,"%02d",profile.selectedSector+1)+" / "+GameModel.LEVELS[profile.selectedSector].name,52,top+116,12,MUTED,false,0);
+        boolean unfinished = activeBattle();
+        button(g,unfinished ? "resume" : "play",unfinished ? "Continue Battle" : "New Attempt",52,top+139,316,46,true,true);
+        if (unfinished) {
+            button(g,"play","New Attempt",52,top+197,152,44,false,true);
+            button(g,"sectors","Select Sector",216,top+197,152,44,false,true);
+            g.text("IN PROGRESS / "+attemptName(),52,top+264,11,MUTED,false,0);
+        } else button(g,"sectors","Select Sector",52,top+197,316,44,false,true);
+        button(g,"challenges","Challenges",52,top+285,152,44,false,true);
+        button(g,"daily","Daily Mission",216,top+285,152,44,false,true);
+        button(g,"mastery","Mastery",52,top+342,316,44,false,true);
+        button(g,"tutorial","How to Play",52,top+399,152,44,false,true);
+        button(g,"help","Rules",216,top+399,152,44,false,true);
+        button(g,"settings","Settings",52,top+456,316,44,false,true);
         int cleared = 0;
         for (int i = 0; i < profile.best.length; i++) if (profile.cleared(i)) cleared++;
         g.text(cleared + " / "+GameModel.LEVELS.length+" CLEARED", 52, height-40, 11, MUTED, true, 0);
@@ -326,7 +411,7 @@ public final class GameScene {
     }
 
     private void drawTutorial(Graphics g) {
-        String[] headings = {"Claim Territory", "Send Troops", "Choose Your Army", "King Boost", "Win and Advance"};
+        String[] headings = {"Claim Territory", "Capture a Tile", "Reinforce and Defend", "King Boost", "Win and Advance"};
         g.text("HOW TO PLAY", 30, 43, 11, COLORS[0], true, 0);
         g.text((tutorialStep+1)+" / 5",390,43,12,MUTED,true,2);
         g.text(headings[tutorialStep], 30, 95, 27, WHITE, true, 0);
@@ -351,10 +436,11 @@ public final class GameScene {
             tutorialCopy(g,"Drag from your tile to attack or reinforce another.","Spend one troop per defender. Survivors capture it.","Crossing enemy troops cancel one-for-one.");
         } else if (tutorialStep == 2) {
             int sent = (int)(32*tutorialFraction);
-            demoTerritory(g,110,y,32-sent,COLORS[0],false);
-            demoTerritory(g,310,y,sent,COLORS[0],false);
+            demoTerritory(g,110,y,reinforcementDone ? 32-sent : 32,COLORS[0],false);
+            demoTerritory(g,310,y,reinforcementDone ? 8+sent : 8,COLORS[0],false);
             g.line(174,y,246,y,2,WHITE);
             g.polygon(new float[] {253,y,241,y-6,241,y+6},WHITE,0,0);
+            if (practiceDragging) g.line(110,y,pointerX,pointerY,3,COLORS[0]);
             g.text("32 - "+sent+" = "+(32-sent),210,y+64,16,WHITE,true,1);
             String[] labels = {"25%", "50%", "100%"};
             String[] ids = {"demo_quarter","demo_half","demo_all"};
@@ -362,8 +448,8 @@ public final class GameScene {
             for (int i = 0; i < 3; i++) {
                 button(g,ids[i],labels[i],87+i*85,y+82,76,40,tutorialFraction == fractions[i],false);
             }
-            tutorialCopy(g,"Choose 25%, 50%, or 100% before you swipe.",
-                (int)(tutorialFraction*100)+"% of 32 sends "+sent+" and leaves "+(32-sent)+" to defend.","Amounts round down. At least 1 troop must be sent.");
+            tutorialCopy(g,"Tap all three amounts, then swipe to reinforce.",
+                (int)(tutorialFraction*100)+"% sends "+sent+"; "+(32-sent)+" remain to defend.","25% saves reserves. 100% leaves this tile exposed.");
         } else if (tutorialStep == 3) {
             demoTerritory(g,92,y,125,COLORS[0],true);
             demoTerritory(g,210,y,100,COLORS[0],false);
@@ -372,26 +458,29 @@ public final class GameScene {
             g.text("BOOST x"+multiplier(boost),210,y+77,18,COLORS[2],true,1);
             button(g,"demo_capture","Capture King",32,y+93,173,42,true,true);
             button(g,"demo_lose","Lose King",215,y+93,173,42,false,true);
-            tutorialCopy(g,"Enemy kings held boost growth across your team.","1: x1.2 / 2: x1.44 / 3: x1.73 / 4: x3 / 5: x3.6",
-                "Losing a king reduces the boost. Your own is excluded.");
+            tutorialCopy(g,"Capture and lose a king in this practice.","One held enemy king gives your whole team x1.2 growth.",
+                "Losing it removes that boost. Full table is in Rules.");
         } else {
             for (int i = 0; i < 3; i++) star(g, 172+i*38, y-20, 14, COLORS[2]);
             demoTerritory(g, 130, y+55, 42, COLORS[0], true);
             demoTerritory(g, 290, y+55, 18, COLORS[0], false);
-            tutorialCopy(g,"Eliminate rivals or hold over 90% for 10 seconds.","Rivals concede only when unable to recapture a tile.","Winning clears this sector and unlocks the next.");
+            tutorialCopy(g,"Campaign: eliminate rival tiles and armies.","Faster wins earn stars. See the target before play.","Campaign wins unlock sectors; missions stay separate.");
         }
         for (int i = 0; i < 5; i++) g.circle(178+i*16,height-160,3.5f,i == tutorialStep ? COLORS[0] : BORDER);
-        boolean ready = tutorialStep != 1 || practiceDone;
+        boolean ready = tutorialReady();
         pageArrow(g,"tutorial_prev","Previous Step",52,height-132,false,tutorialStep > 0);
         if (ready) button(g,"tutorial_next",tutorialStep == 4 ? tutorialStartsBattle ? "Start Battle" : "Done" : "Next",118,height-132,250,48,true,true);
         else {
             g.rect(118,height-132,250,48,6,PANEL);
-            g.text("Swipe above to continue",243,height-103,13,MUTED,true,1);
+            g.text(tutorialStep == 3 ? "Try capture and loss above" : tutorialStep == 2 && fractionVisits != 7 ? "Try all three amounts" : "Swipe above to continue",243,height-103,13,MUTED,true,1);
         }
         button(g,"tutorial_skip","Skip Tutorial",52,height-75,316,48,false,true);
     }
 
     private float tutorialY() { return Math.min(225, (height-400)/2+85); }
+    private boolean tutorialReady() {
+        return tutorialStep == 1 ? practiceDone : tutorialStep == 2 ? reinforcementDone && fractionVisits == 7 : tutorialStep != 3 || kingPracticeGain && kingPracticeLoss;
+    }
 
     private void tutorialCopy(Graphics g, String first, String second, String third) {
         float baseline = height-276;
@@ -468,13 +557,16 @@ public final class GameScene {
             if (!locked) buttons.add(new Button("level_"+i,GameModel.LEVELS[i].name,20,row,380,rowHeight-2));
             g.text(String.format(java.util.Locale.US,"%02d",i+1),24,row+23,16,locked ? MUTED : COLORS[0],true,0);
             g.text(GameModel.LEVELS[i].name,64,row+19,15,locked ? MUTED : WHITE,true,0);
+            int record = profile.progress.best[profile.difficulty][i];
+            String recordLabel = record > 0 ? GameModel.DIFFICULTIES[profile.difficulty]+" "+record+" / "+time(profile.progress.times[profile.difficulty][i]) : "No "+GameModel.DIFFICULTIES[profile.difficulty]+" record";
+            if (profile.best[i] > 0) recordLabel += " / Legacy "+profile.best[i];
             g.text(locked ? "Locked - clear Sector " + String.format(java.util.Locale.US, "%02d", i) :
-                cleared ? "Cleared  /  Best " + profile.best[i] : i == profile.selectedSector ? "Selected  /  Ready to play" : "Unlocked",
+                cleared ? "Cleared / "+recordLabel : i == profile.selectedSector ? "Selected / "+recordLabel : "Unlocked / "+recordLabel,
                 64,row+36,10,MUTED,false,0);
             if (locked) {
                 g.circle(366,row+15,6,MUTED); g.circle(366,row+15,3,BACKGROUND);
                 g.rect(358,row+15,16,12,2,MUTED); g.circle(366,row+20,1.5f,BACKGROUND);
-            } else for (int s = 0; s < 3; s++) star(g,331+s*17,row+20,5.5f,s < profile.stars[i] ? COLORS[2] : BORDER);
+            } else for (int s = 0; s < 3; s++) star(g,331+s*17,row+20,5.5f,s < profile.progress.stars[profile.difficulty][i] ? COLORS[2] : BORDER);
             g.line(22,row+rowHeight-1,398,row+rowHeight-1,1,BORDER);
         }
         pageArrow(g,"chapter_prev","Previous Chapter",22,height-132,false,sectorPage > 0);
@@ -524,14 +616,19 @@ public final class GameScene {
     }
 
     private void drawSettings(Graphics g) {
-        float y = modal(g, 427);
+        float y = modal(g, 570);
         g.text("Settings", 52, y+47, 27, WHITE, true, 0);
         toggle(g,"music","Music",y+79,profile.music);
         toggle(g,"sound","Sound Effects",y+134,profile.sound);
         toggle(g,"haptics","Vibration",y+189,profile.haptics);
-        g.text("Difficulty",52,y+271,14,WHITE,true,0);
-        for (int i = 0; i < 3; i++) button(g,"difficulty_"+i,GameModel.DIFFICULTIES[i],52+i*108,y+288,100,40,profile.difficulty == i,false);
-        button(g,"back","Back",52,y+358,316,46,false,true);
+        g.text("Difficulty",52,y+259,14,WHITE,true,0);
+        g.text("NEXT ATTEMPT",368,y+259,10,MUTED,true,2);
+        for (int i = 0; i < 3; i++) button(g,"difficulty_"+i,GameModel.DIFFICULTIES[i],52+i*108,y+278,100,38,profile.difficulty == i,false);
+        button(g,"unlock_code","Enter Code",52,y+332,316,44,false,true);
+        toggle(g,"playtest_log","Local Playtest Log",y+386,profile.log.enabled);
+        button(g,"export_log","Export CSV",52,y+444,152,38,false,true);
+        button(g,"clear_log","Clear Log",216,y+444,152,38,false,true);
+        button(g,"back","Back",52,y+503,316,44,false,true);
     }
 
     private void toggle(Graphics g, String id, String name, float y, boolean enabled) {
@@ -544,24 +641,28 @@ public final class GameScene {
 
     private void drawResult(Graphics g) {
         boolean won = model.outcome == GameModel.WON;
-        boolean chapterWon = won && (model.levelIndex+1)%Campaign.SECTORS_PER_CHAPTER == 0;
-        boolean campaignWon = won && model.levelIndex == GameModel.LEVELS.length-1;
-        float y = modal(g, 465);
-        g.text(won ? campaignWon ? "Campaign Complete" : chapterWon ? "Chapter Secured" : "Sector Secured" : "Sector Lost",210,y+48,27,WHITE,true,1);
+        boolean mission = model.objectiveType != 0;
+        boolean chapterWon = won && !mission && (model.levelIndex+1)%Campaign.SECTORS_PER_CHAPTER == 0;
+        boolean campaignWon = won && !mission && model.levelIndex == GameModel.LEVELS.length-1;
+        float y = modal(g, 535);
+        g.text(mission ? won ? "Objective Complete" : "Objective Failed" : won ? campaignWon ? "Campaign Complete" : chapterWon ? "Chapter Secured" : "Sector Secured" : "Sector Lost",210,y+48,25,WHITE,true,1);
         if (won) for (int i = 0; i < 3; i++) star(g, 173+i*37, y+84, 13, i < model.stars() ? COLORS[2] : BORDER);
         else g.text("Regroup. Try a new approach.", 210, y+86, 13, MUTED, false, 1);
         if (chapterWon) g.text(campaignWon ? "THE FRONTIER IS UNITED" : Campaign.chapter(model.levelIndex+1).name+" unlocked",210,y+111,11,COLORS[0],true,1);
         else if (won) for (boolean surrendered : model.resigned) if (surrendered) { g.text("RIVAL SURRENDER",210,y+111,11,COLORS[2],true,1); break; }
         g.text(won ? "SCORE" : "ARMY DEPLOYED", 210, y+130, 11, MUTED, true, 1);
         g.text(Integer.toString(won ? model.score() : model.unitsSent), 210, y+175, 42, won ? COLORS[0] : COLORS[1], true, 1);
-        g.text("TIME", 117, y+212, 10, MUTED, true, 1);
-        g.text(time(model.elapsed), 117, y+236, 20, WHITE, true, 1);
-        g.text("CAPTURES", 304, y+212, 10, MUTED, true, 1);
-        g.text(Integer.toString(model.captures), 304, y+236, 20, WHITE, true, 1);
-        String primary = won && model.levelIndex < GameModel.LEVELS.length-1 ? "next" : won ? "sectors" : "restart";
-        button(g, primary, primary.equals("next") ? "Next Sector" : won ? "All Sectors" : "Try Again", 52, y+266, 316, 48, true, true);
-        button(g, won ? "restart" : "sectors", won ? "Replay Sector" : "Sectors", 52, y+324, 316, 48, false, true);
-        button(g, "menu", "Main Menu", 52, y+381, 316, 48, false, true);
+        g.text("TIME / 3-STAR TARGET",210,y+212,10,MUTED,true,1);
+        g.text(time(model.elapsed)+" / "+time(model.level().parSeconds),210,y+238,21,WHITE,true,1);
+        float bestTime = model.rulesVersion == 0 ? profile.times[model.levelIndex] : !model.dailyDate.isEmpty() ? profile.progress.dailyTime(model.dailyDate) : !mission ? profile.progress.times[model.difficulty][model.levelIndex] : model.challengeId < 0 ? 0 : profile.progress.challengeTimes[model.difficulty][model.challengeId];
+        g.text(model.rulesVersion == 0 ? "LEGACY / DIFFICULTY UNKNOWN" : GameModel.DIFFICULTIES[model.difficulty].toUpperCase()+" / PB "+(bestTime == 0 ? "--:--" : time(bestTime))+" / "+(won && improvedTime ? "TIME IMPROVED" : "NO FASTER TIME"),210,y+266,11,COLORS[0],true,1);
+        if (won && improvedScore) g.text("NEW BEST SCORE",210,y+288,10,COLORS[2],true,1);
+        String insight = !model.historyKnown ? "" : model.startingKingLost ? "Your starting king was lost during this attempt." : model.intercepted > 0 ? model.intercepted+" troops canceled in crossing attacks." : model.cappedReinforcements > 0 ? model.cappedReinforcements+" reinforcements were lost at troop caps." : model.captures+" territories captured this attempt.";
+        g.text(insight,210,y+309,11,MUTED,false,1);
+        String primary = mission ? model.dailyDate.isEmpty() ? "challenges" : "daily" : won && model.levelIndex < GameModel.LEVELS.length-1 ? "next" : won ? "sectors" : "restart";
+        button(g,primary,mission ? "Missions" : primary.equals("next") ? "Next Sector" : won ? "All Sectors" : "Try Again",52,y+324,316,48,true,true);
+        button(g,"restart",mission ? "Retry Mission" : "Replay Sector",52,y+382,316,48,false,true);
+        button(g,"menu","Main Menu",52,y+440,316,48,false,true);
     }
 
     private void button(Graphics g, String id, String label, float x, float y, float w, float h, boolean active, boolean command) {
@@ -601,7 +702,7 @@ public final class GameScene {
         pressed = null; selected = -1;
         practiceDragging = false; panning = false;
         for (Button button : buttons) if (button.contains(x,y)) { pressed = button; return; }
-        if (overlay == TUTORIAL && tutorialStep == 1 && !practiceDone && Math.hypot(x-110,y-tutorialY()) <= 66) {
+        if (overlay == TUTORIAL && (tutorialStep == 1 && !practiceDone || tutorialStep == 2) && Math.hypot(x-110,y-tutorialY()) <= 66) {
             practiceDragging = true; pointerX = x; pointerY = y; return;
         }
         if (overlay != NONE) return;
@@ -611,6 +712,140 @@ public final class GameScene {
         } else if (y >= boardTop() && y <= boardBottom() && zoom > 1) {
             panning = true; pointerX = x; pointerY = y;
         }
+    }
+
+    private boolean activeBattle() { return hasBattle && model.outcome == GameModel.PLAYING; }
+    private String attemptName() {
+        return model.dailyDate.isEmpty() ? model.objectiveType == 0 ? "Sector "+(model.levelIndex+1) : "Challenge / Sector "+(model.levelIndex+1) : "Daily "+model.dailyDate;
+    }
+    private void log(String event,String detail) { profile.log.add(events.now(),event,hasBattle ? model : null,detail); }
+    private static int feedbackPriority(int type) {
+        return type == GameModel.HOME_KING_LOSS_EVENT ? 6 : type == GameModel.KING_GAIN_EVENT || type == GameModel.KING_LOSS_EVENT ? 5 : type == GameModel.CAP_LOSS_EVENT ? 4 : type == GameModel.INTERCEPT_EVENT ? 3 : 1;
+    }
+    private String feedbackText() {
+        if (feedbackType == GameModel.HOME_KING_LOSS_EVENT) return "Starting king lost / enemy-king bonus unaffected.";
+        if (feedbackType == GameModel.KING_GAIN_EVENT) return "Enemy king secured / team growth updated.";
+        if (feedbackType == GameModel.KING_LOSS_EVENT) return "Held enemy king lost / team growth reduced.";
+        if (feedbackType == GameModel.CAP_LOSS_EVENT) return feedbackUnits+" reinforcement troops lost to the cap.";
+        if (feedbackType == GameModel.INTERCEPT_EVENT) return feedbackUnits+" troops canceled in interception.";
+        return "Capture complete / "+feedbackUnits+" troops survived.";
+    }
+    private String objectiveLabel() {
+        if (model.objectiveType == Challenge.HOLD_KING) return "HOLD MARKED KING  "+time(model.objectiveProgress)+" / "+time(model.objectiveSeconds);
+        if (model.objectiveType == Challenge.KEEP_KING) return "KEEP STARTING KING  "+time(model.elapsed)+" / "+time(model.objectiveSeconds);
+        if (model.objectiveType == Challenge.BUDGET) return "DEPLOYMENT BUDGET  "+model.unitsSent+" / "+model.deploymentBudget;
+        return model.levelIndex == 0 ? "Capture neutral space. Keep troops at home." : model.levelIndex == 1 ? "Reinforce your front; 100% leaves no defenders." :
+            model.levelIndex == 2 ? "Hold enemy kings to boost your whole team." : "Eliminate every rival territory and surviving army.";
+    }
+    private void drawBriefing(Graphics g) {
+        float y = (height-550)/2;
+        int difficulty = previewMode == 2 ? 1 : profile.difficulty;
+        Challenge challenge = previewMode == 0 ? null : Challenge.PRESETS[previewChallenge];
+        int sector = challenge == null ? previewSector : challenge.sector;
+        g.text(previewMode == 2 ? "Daily Mission" : challenge == null ? "New Attempt" : challenge.name,30,y+35,26,WHITE,true,0);
+        g.text(GameModel.LEVELS[sector].name,30,y+66,18,COLORS[0],true,0);
+        g.text(GameModel.DIFFICULTIES[difficulty]+" / "+(previewMode == 2 ? previewDate+" / UTC" : "Sector "+(sector+1)),30,y+92,12,MUTED,false,0);
+        g.text("3 STARS <= "+time(GameModel.LEVELS[sector].parSeconds)+" / 2 STARS <= "+time(GameModel.LEVELS[sector].parSeconds*1.6f),30,y+122,12,COLORS[2],true,0);
+        float bestTime = challenge == null ? profile.progress.times[difficulty][sector] : previewMode == 2 ? profile.progress.dailyTime(previewDate) : profile.progress.challengeTimes[difficulty][previewChallenge];
+        g.text("PERSONAL BEST  "+(bestTime > 0 ? time(bestTime) : "Unplayed"),30,y+146,12,WHITE,false,0);
+        if (challenge == null && profile.best[sector] > 0) g.text("LEGACY  "+profile.best[sector]+" score / difficulty unknown",30,y+168,11,MUTED,false,0);
+        g.text(challenge == null ? "Eliminate rivals. Any tile can be targeted." : challenge.objective(),30,y+193,11,WHITE,true,0);
+        g.text(challenge == null ? "Gaps do not block troop travel." : challenge.type == Challenge.HOLD_KING ? "Losing the marked king resets the hold timer." : challenge.type == Challenge.KEEP_KING ? "Any loss of your starting king fails this mission." : "Exceeding the troop budget fails this mission.",30,y+215,11,MUTED,false,0);
+        for (int owner = 1; owner <= GameModel.LEVELS[sector].opponents; owner++) {
+            int faction = GameModel.LEVELS[sector].faction(owner);
+            g.text(Campaign.SHORT_NAMES[faction]+" / "+GameModel.styleName(faction == 1 || faction == 3 ? GameModel.PRESSURE : GameModel.GUARDIAN),30,y+245+(owner-1)*19,12,COLORS[faction],true,0);
+        }
+        g.text("Pressure targets crowns; Guardians keep larger reserves.",30,y+344,11,MUTED,false,0);
+        button(g,"begin_attempt","Start Attempt",52,y+369,316,46,true,true);
+        button(g,"brief_back","Back",52,y+426,152,44,false,true);
+        button(g,"help","Rules",216,y+426,152,44,false,true);
+    }
+    private void drawConfirmation(Graphics g) {
+        float y = modal(g,300);
+        g.text("Replace Battle?",52,y+48,24,WHITE,true,0);
+        g.text(attemptName()+" / "+time(model.elapsed),52,y+81,13,COLORS[2],true,0);
+        g.text("The unfinished attempt will be discarded.",52,y+115,13,WHITE,false,0);
+        g.text("Scores and completed sectors are kept.",52,y+139,12,MUTED,false,0);
+        button(g,"confirm_replace",confirmationReason.equals("restart") ? "Restart" : "Replace",52,y+169,316,46,true,true);
+        button(g,"cancel_replace","Keep Battle",52,y+226,316,46,false,true);
+    }
+    private void drawChallenges(Graphics g) {
+        g.text("Challenges",22,55,27,WHITE,true,0);
+        String[] names = {"Hold King","Home Guard","Troop Budget"};
+        for (int i = 0; i < 3; i++) button(g,"mission_tab_"+i,names[i],22+i*127,85,122,40,challengePage == i,false);
+        for (int row = 0; row < 3; row++) {
+            int id = challengePage*3+row; Challenge challenge = Challenge.PRESETS[id]; float y = 159+row*100;
+            buttons.add(new Button("challenge_"+id,challenge.name,22,y-22,376,89));
+            g.text(challenge.name,22,y,19,WHITE,true,0);
+            g.text(challenge.objective(),22,y+24,11,MUTED,false,0);
+            float best = profile.progress.challengeTimes[profile.difficulty][id];
+            g.text(GameModel.DIFFICULTIES[profile.difficulty]+" / Best "+(best > 0 ? time(best) : "--"),22,y+47,11,COLORS[2],false,0);
+            g.line(22,y+65,398,y+65,1,BORDER);
+        }
+        g.text("Initial timers and budgets / playtest candidates",22,height-138,11,MUTED,false,0);
+        for (int i = 0; i < 3; i++) button(g,"difficulty_"+i,GameModel.DIFFICULTIES[i],22+i*127,height-120,122,38,profile.difficulty == i,false);
+        button(g,"home","Main Menu",52,height-69,316,44,false,true);
+    }
+    private void drawDaily(Graphics g) {
+        String date = Challenge.date(events.now()); int id = Challenge.dailyId(date);
+        g.text("Daily Mission",22,55,27,WHITE,true,0);
+        g.text(date+" / "+Challenge.DAILY_VERSION,22,87,12,COLORS[2],true,0);
+        g.text(Challenge.PRESETS[id].name,22,139,23,WHITE,true,0);
+        g.text(Challenge.PRESETS[id].objective(),22,178,11,MUTED,false,0);
+        g.text("NORMAL / fixed difficulty",22,218,13,WHITE,true,0);
+        g.text("BEST SCORE  "+profile.progress.dailyBest(date),22,258,13,WHITE,false,0);
+        float best = profile.progress.dailyTime(date);
+        g.text("BEST TIME  "+(best > 0 ? time(best) : "--"),22,287,13,MUTED,false,0);
+        long remaining = Challenge.untilReset(events.now())/1000;
+        String countdown = String.format(java.util.Locale.US,"%02d:%02d:%02d",remaining/3600,remaining%3600/60,remaining%60);
+        g.text("Resets 00:00 UTC / in "+countdown,22,331,12,COLORS[2],true,0);
+        if (!model.dailyDate.isEmpty() && activeBattle()) g.text("Saved daily: "+model.dailyDate,22,366,12,WHITE,false,0);
+        button(g,"today_mission","Today's Mission",52,height-190,316,46,true,true);
+        if (!model.dailyDate.isEmpty() && activeBattle()) button(g,"resume","Continue Saved Daily",52,height-132,316,46,false,true);
+        button(g,"home","Main Menu",52,height-69,316,44,false,true);
+    }
+    private void drawMastery(Graphics g) {
+        g.text("Mastery",22,55,27,WHITE,true,0);
+        String[] names = {"Crown Keeper","Normal Chapter","Objective Specialist"};
+        String[] detail = {"Win a new attempt without losing your starting king.","Win all six Border Sparks sectors on Normal.","Win all three objective types."};
+        boolean[] earned = {profile.progress.crownKeeper,profile.progress.chapterNormal,profile.progress.objectiveMaster};
+        String[] counts = {earned[0] ? "Earned" : "0 / 1",profile.progress.chapterProgress()+" / 6",profile.progress.objectiveProgress()+" / 3"};
+        for (int i = 0; i < 3; i++) {
+            float y = 126+i*100;
+            star(g,34,y-6,10,earned[i] ? COLORS[2] : BORDER);
+            g.text(names[i],56,y,18,WHITE,true,0); g.text(counts[i],398,y,12,earned[i] ? COLORS[2] : MUTED,true,2);
+            g.text(detail[i],22,y+28,11,MUTED,false,0); g.line(22,y+54,398,y+54,1,BORDER);
+        }
+        g.text("COSMETIC THEMES",22,height-184,12,MUTED,true,0);
+        String[] themes = {"Classic","Signal","Blueprint"};
+        for (int i = 0; i < 3; i++) {
+            if (profile.progress.themeUnlocked(i)) button(g,"theme_"+i,themes[i],22+i*127,height-165,122,42,profile.progress.theme == i,false);
+            else { g.rect(22+i*127,height-165,122,42,4,PANEL); g.text(themes[i]+" / Locked",83+i*127,height-139,11,MUTED,true,1); }
+        }
+        button(g,"home","Main Menu",52,height-69,316,44,false,true);
+    }
+    private void drawHelp(Graphics g) {
+        g.text("Field Manual",22,55,27,WHITE,true,0);
+        String[] lines = {"Any tile can be targeted. Gaps do not block travel.","Reinforcements beyond 100 / 125 are discarded.","Enemy kings held: 1 x1.2 / 2 x1.44 / 3 x1.728.","Four enemy kings: x3. Each additional king: x1.2.","Your original king never counts toward that boost.","Hostile armies meeting in flight cancel one-for-one.","Surrender: >90% control for ten active seconds,", "and rivals cannot recapture any exposed tile.","3 stars: at/below par. 2 stars: at/below 1.6x par.","Score: 1000 + 50 per capture + time bonus", "(up to 1200, minus 6 per second) + 250 per difficulty.","Legacy records have unknown historical difficulty."};
+        for (int i = 0; i < lines.length; i++) g.text(lines[i],22,108+i*31,11,i%2 == 0 ? WHITE : MUTED,false,0);
+        button(g,"help_back","Back",52,height-69,316,44,false,true);
+    }
+    private void drawCameraHelp(Graphics g) {
+        float y = modal(g,300);
+        g.text("Larger Battlefield",52,y+47,23,WHITE,true,0);
+        g.text("Pinch to zoom; use two fingers to pan.",52,y+91,13,WHITE,false,0);
+        g.text("One finger on your tile deploys troops.",52,y+121,12,MUTED,false,0);
+        g.text("When zoomed, drag other space to pan.",52,y+151,12,MUTED,false,0);
+        g.text("The fit icon restores the full board.",52,y+181,12,MUTED,false,0);
+        button(g,"camera_ready","Continue",52,y+220,316,46,true,true);
+    }
+    private static void factionMark(Graphics g,float x,float y,float r,int faction,int color) {
+        if (faction == 0) g.circle(x,y,r,color);
+        else if (faction == 1) { g.line(x-r,y+r*.5f,x,y-r*.5f,1.5f,color); g.line(x,y-r*.5f,x+r,y+r*.5f,1.5f,color); }
+        else if (faction == 2) g.polygon(new float[] {x,y-r,x+r,y,x,y+r,x-r,y},0,color,1.3f);
+        else if (faction == 3) { g.circle(x,y,r,color); g.circle(x+r*.5f,y-r*.3f,r*.8f,BACKGROUND); }
+        else if (faction == 4) g.polygon(new float[] {x-r,y-r,x+r,y-r,x+r,y,x,y+r,x-r,y},0,color,1.3f);
+        else { g.line(x-r,y,x+r,y,1.4f,color); g.line(x,y-r,x,y+r,1.4f,color); g.line(x-r*.7f,y-r*.7f,x+r*.7f,y+r*.7f,1.3f,color); }
     }
 
     public void move(float x, float y) {
@@ -624,7 +859,10 @@ public final class GameScene {
             if (button.contains(x,y)) command(button.id);
         } else if (overlay == SPLASH) overlay = MENU;
         else if (practiceDragging && overlay == TUTORIAL) {
-            if (Math.hypot(x-310,y-tutorialY()) <= 66) { practiceDone = true; events.cue(1); }
+            if (Math.hypot(x-310,y-tutorialY()) <= 66) {
+                if (tutorialStep == 1) practiceDone = true; else reinforcementDone = true;
+                events.cue(1); log("tutorial_practice",tutorialStep == 1 ? "capture" : "reinforcement");
+            }
         } else if (selected >= 0 && overlay == NONE) {
             int target = territoryAt(x,y);
             if (target >= 0 && model.territories.get(selected).owner == GameModel.PLAYER
@@ -638,41 +876,78 @@ public final class GameScene {
 
     public void back() {
         cancel();
-        if (overlay == NONE) overlay = PAUSE;
-        else if (overlay == PAUSE) overlay = NONE;
+        if (overlay == NONE) pause();
+        else if (overlay == PAUSE) { overlay = NONE; log("resume","back"); }
         else if (overlay == SETTINGS || overlay == SECTORS) overlay = previousOverlay;
+        else if (overlay == CONFIRM) cancelReplacement();
+        else if (overlay == HELP) overlay = helpReturn;
+        else if (overlay == BRIEFING) overlay = previewMode == 0 ? MENU : previewMode == 1 ? CHALLENGES : DAILY;
+        else if (overlay == CHALLENGES || overlay == DAILY || overlay == MASTERY) overlay = MENU;
+        else if (overlay == CAMERA_HELP) overlay = PAUSE;
         else if (overlay == SPLASH || overlay == RESULT) overlay = MENU;
         else if (overlay == TUTORIAL) {
-            if (tutorialStep > 0) tutorialStep--;
+            if (tutorialStep > 0) { tutorialStep--; log("tutorial_step","step="+(tutorialStep+1)); }
             else { tutorialStartsBattle = false; overlay = MENU; }
         }
+        events.changed();
     }
 
-    public void pause() { cancel(); if (overlay == NONE) overlay = PAUSE; }
+    public void pause() { cancel(); if (overlay == NONE) { overlay = PAUSE; log("pause",""); } }
 
     private void command(String id) {
         events.cue(0);
-        if (id.equals("pause")) overlay = PAUSE;
-        else if (id.equals("resume")) overlay = NONE;
-        else if (id.equals("menu")) { cancel(); overlay = MENU; }
+        if (id.equals("pause")) pause();
+        else if (id.equals("resume")) { overlay = NONE; log("resume",""); }
+        else if (id.equals("menu") || id.equals("home")) { cancel(); overlay = MENU; }
         else if (id.equals("play")) {
-            if (profile.tutorialSeen) start(profile.selectedSector);
-            else openTutorial(true);
+            previewMode = 0; previewSector = profile.selectedSector; overlay = BRIEFING;
+        }
+        else if (id.equals("begin_attempt")) requestReplacement(this::beginPreview,"new_attempt");
+        else if (id.equals("confirm_replace")) {
+            Runnable action = confirmedAction; confirmedAction = null;
+            log(confirmationReason+"_confirm",""); log("abandon",confirmationReason);
+            if (action != null) action.run();
+        }
+        else if (id.equals("cancel_replace")) cancelReplacement();
+        else if (id.equals("brief_back")) back();
+        else if (id.equals("challenges")) overlay = CHALLENGES;
+        else if (id.equals("daily")) overlay = DAILY;
+        else if (id.equals("mastery")) overlay = MASTERY;
+        else if (id.equals("help")) { helpReturn = overlay; overlay = HELP; }
+        else if (id.equals("help_back")) overlay = helpReturn;
+        else if (id.equals("camera_ready")) { profile.cameraGuideSeen = true; overlay = NONE; }
+        else if (id.equals("today_mission")) {
+            previewMode = 2; previewDate = Challenge.date(events.now()); previewChallenge = Challenge.dailyId(previewDate);
+            previewSector = Challenge.PRESETS[previewChallenge].sector; overlay = BRIEFING;
+        }
+        else if (id.startsWith("challenge_")) {
+            previewMode = 1; previewChallenge = Integer.parseInt(id.substring(10));
+            previewSector = Challenge.PRESETS[previewChallenge].sector; overlay = BRIEFING;
+        }
+        else if (id.startsWith("mission_tab_")) challengePage = Integer.parseInt(id.substring(12));
+        else if (id.startsWith("theme_")) {
+            int theme = Integer.parseInt(id.substring(6));
+            if (profile.progress.themeUnlocked(theme)) profile.progress.theme = theme;
         }
         else if (id.equals("tutorial")) openTutorial(false);
-        else if (id.equals("tutorial_prev")) tutorialStep = Math.max(0,tutorialStep-1);
-        else if (id.equals("demo_quarter")) tutorialFraction = .25;
-        else if (id.equals("demo_half")) tutorialFraction = .5;
-        else if (id.equals("demo_all")) tutorialFraction = 1;
-        else if (id.equals("demo_capture")) tutorialKings = Math.min(5,tutorialKings+1);
-        else if (id.equals("demo_lose")) tutorialKings = Math.max(0,tutorialKings-1);
+        else if (id.equals("tutorial_prev")) { tutorialStep = Math.max(0,tutorialStep-1); log("tutorial_step","step="+(tutorialStep+1)); }
+        else if (id.equals("demo_quarter")) { tutorialFraction = .25; fractionVisits |= 1; }
+        else if (id.equals("demo_half")) { tutorialFraction = .5; fractionVisits |= 2; }
+        else if (id.equals("demo_all")) { tutorialFraction = 1; fractionVisits |= 4; }
+        else if (id.equals("demo_capture")) { tutorialKings = Math.min(5,tutorialKings+1); kingPracticeGain = true; }
+        else if (id.equals("demo_lose")) {
+            if (tutorialKings > 0) { tutorialKings--; kingPracticeLoss = true; }
+        }
         else if (id.equals("tutorial_next")) {
             if (tutorialStep == 4) finishTutorial();
-            else if (tutorialStep != 1 || practiceDone) tutorialStep++;
+            else if (tutorialReady()) { tutorialStep++; log("tutorial_step","step="+(tutorialStep+1)); }
         }
-        else if (id.equals("tutorial_skip")) finishTutorial();
-        else if (id.equals("restart")) start(model.levelIndex);
-        else if (id.equals("next")) start(Math.min(GameModel.LEVELS.length-1, model.levelIndex+1));
+        else if (id.equals("tutorial_skip")) { log("tutorial_skip","step="+(tutorialStep+1)); finishTutorial(); }
+        else if (id.equals("restart")) { log("retry",""); requestReplacement(this::restartAttempt,"restart"); }
+        else if (id.equals("next")) {
+            log("next_sector",""); previewMode = 0; previewSector = Math.min(GameModel.LEVELS.length-1,model.levelIndex+1);
+            profile.selectedSector = previewSector; overlay = BRIEFING;
+        }
         else if (id.equals("settings") || id.equals("sectors")) {
             previousOverlay = overlay; overlay = id.equals("settings") ? SETTINGS : SECTORS;
             if (overlay == SECTORS) sectorPage = Campaign.chapterIndex(profile.selectedSector);
@@ -685,37 +960,89 @@ public final class GameScene {
         else if (id.equals("zoom_in")) cameraGesture(210,(boardTop()+boardBottom())/2,1.25f,0,0);
         else if (id.equals("zoom_out")) cameraGesture(210,(boardTop()+boardBottom())/2,.8f,0,0);
         else if (id.equals("fit_board")) { zoom = 1; panX = panY = 0; layoutBoard(); }
+        else if (id.equals("unlock_code")) events.unlockCodeRequested();
         else if (id.equals("sound")) profile.sound = !profile.sound;
         else if (id.equals("music")) profile.music = !profile.music;
         else if (id.equals("haptics")) profile.haptics = !profile.haptics;
+        else if (id.equals("playtest_log")) profile.log.enabled = !profile.log.enabled;
+        else if (id.equals("export_log")) events.exportPlaytestRequested();
+        else if (id.equals("clear_log")) profile.log.clear();
         else if (id.startsWith("level_")) {
             int level = Integer.parseInt(id.substring(6));
             if (level <= profile.unlocked) { profile.selectedSector = level; overlay = MENU; }
         } else if (id.startsWith("difficulty_")) {
             profile.difficulty = Integer.parseInt(id.substring(11));
-            model.difficulty = profile.difficulty;
         }
         events.changed();
     }
 
+    public boolean redeemUnlockCode(String code) {
+        if (overlay != SETTINGS || !"12345".equals(code)) return false;
+        profile.unlocked = GameModel.LEVELS.length-1;
+        events.changed();
+        return true;
+    }
+
     public void start(int level) {
-        model = new GameModel(level, profile.difficulty, System.nanoTime());
-        profile.selectedSector = level; hasBattle = true;
-        resultRecorded = false; kingBanner = 0; resultDelay = 0; zoom = 1; panX = panY = 0; overlay = NONE; cancel();
+        installAttempt(new GameModel(level,profile.difficulty,System.nanoTime()));
+        profile.selectedSector = level;
+    }
+
+    private void installAttempt(GameModel next) {
+        model = next; model.aiVersion = 1; hasBattle = true;
+        resultRecorded = false; improvedTime = improvedScore = false;
+        kingBanner = resultDelay = feedbackTimer = 0; feedbackType = feedbackUnits = 0;
+        zoom = 1; panX = panY = 0; overlay = NONE; cancel(); log("attempt_start","");
+    }
+
+    private void requestReplacement(Runnable action,String reason) {
+        if (!activeBattle()) { action.run(); return; }
+        log(reason+"_request",""); cancel();
+        confirmationReturn = overlay == NONE ? PAUSE : overlay;
+        confirmationReason = reason; confirmedAction = action; overlay = CONFIRM;
+    }
+
+    private void cancelReplacement() {
+        log(confirmationReason+"_cancel",""); confirmedAction = null; overlay = confirmationReturn;
+    }
+
+    private void beginPreview() {
+        if (previewMode == 0) start(previewSector);
+        else installAttempt(Challenge.PRESETS[previewChallenge].create(previewMode == 2 ? 1 : profile.difficulty,
+            previewMode == 2 ? Challenge.dailySeed(previewDate) : System.nanoTime(),previewChallenge,previewMode == 2 ? previewDate : ""));
+        if (!profile.tutorialSeen) openTutorial(true); else showCameraGuide();
+    }
+
+    private void restartAttempt() {
+        GameModel old = model;
+        GameModel next = new GameModel(old.levelIndex,old.dailyDate.isEmpty() ? profile.difficulty : old.difficulty,
+            old.dailyDate.isEmpty() ? System.nanoTime() : old.seed);
+        if (old.objectiveType != 0) {
+            next.configureChallenge(old.objectiveType,old.objectiveTarget,old.objectiveSeconds,old.deploymentBudget);
+            next.challengeId = old.challengeId; next.dailyDate = old.dailyDate;
+        }
+        installAttempt(next); showCameraGuide();
+    }
+
+    private void showCameraGuide() {
+        if (model.levelIndex >= 30 && !profile.cameraGuideSeen) overlay = CAMERA_HELP;
     }
 
     private void openTutorial(boolean startsBattle) {
-        cancel(); tutorialStep = 0; practiceDone = false; tutorialFraction = .25; tutorialKings = 0;
+        cancel(); tutorialStep = 0; practiceDone = reinforcementDone = kingPracticeGain = kingPracticeLoss = false;
+        tutorialFraction = .25; tutorialKings = 0; fractionVisits = 0;
         tutorialStartsBattle = startsBattle; overlay = TUTORIAL;
+        log("tutorial_start",startsBattle ? "first_attempt" : "replay");
     }
 
     private void finishTutorial() {
         profile.tutorialSeen = true;
-        if (tutorialStartsBattle) start(profile.selectedSector); else overlay = MENU;
+        log("tutorial_complete","");
+        if (tutorialStartsBattle) { overlay = NONE; showCameraGuide(); } else overlay = MENU;
         tutorialStartsBattle = false;
     }
 
-    public boolean needsAnimation() { return overlay == NONE || overlay == SPLASH; }
+    public boolean needsAnimation() { return overlay == NONE || overlay == SPLASH || overlay == DAILY; }
 
     private int territoryAt(float x, float y) {
         if (y < boardTop()-7 || y > boardBottom()+8 || x < 8 || x > 412) return -1;

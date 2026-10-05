@@ -5,7 +5,10 @@ import java.util.Base64;
 public final class SaveProbe {
     public static void main(String[] args) throws Exception {
         GameModel model = GameModel.restore(Base64.getDecoder().decode(args[0]));
-        if (args.length > 1 && args[1].equals("--level")) {
+        if (args.length > 1 && args[1].equals("--compare")) {
+            GameModel other = GameModel.restore(Base64.getDecoder().decode(args[2]));
+            if (!java.util.Arrays.equals(model.save(),other.save())) throw new AssertionError("Migrated battle state changed");
+        } else if (args.length > 1 && args[1].equals("--level")) {
             if (model.levelIndex != Integer.parseInt(args[2])) throw new AssertionError("Unexpected selected sector");
         } else if (args.length > 1 && args[1].equals("--final")) {
             if (model.levelIndex != 59 || model.outcome != GameModel.WON)

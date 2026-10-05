@@ -90,7 +90,7 @@ final class SharedRulesTest {
         model = quiet(0); packet = new GameModel.Troop(0,1,0,1,0); packet.units = -1; model.troops.add(packet);
         reject(model.save(),"Invalid grouped troop quantity rejected");
         model = quiet(0);
-        check(java.nio.ByteBuffer.wrap(model.save()).getInt() == 0x464C3033,"V6 battles store six teams and resignation state in the new format");
+        check(java.nio.ByteBuffer.wrap(model.save()).getInt() == 0x464C3034,"V10 saves retain six teams and resignation state with objective/history metadata");
         check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"V6 battle roundtrip remains exact");
     }
 
@@ -148,7 +148,8 @@ final class SharedRulesTest {
         }
         click(scene,"tutorial_prev"); scene.render(new GameModelTest.NullGraphics(),700);
         check(scene.buttonPosition("tutorial_next") != null,"Going back retains completed swipe practice");
-        click(scene,"tutorial_next"); click(scene,"tutorial_next");
+        click(scene,"tutorial_next"); scene.down(110,225); scene.up(310,225); click(scene,"tutorial_next");
+        click(scene,"demo_capture"); click(scene,"demo_lose");
         labels = new GameModelTest.TextGraphics(); scene.render(labels,700);
         check(!labels.text.contains("Scores and progress stay on this device, offline."),"Requested offline-progress line is removed from How to Play");
         click(scene,"tutorial_prev"); click(scene,"tutorial_next"); click(scene,"tutorial_next"); click(scene,"tutorial_next");
@@ -158,6 +159,7 @@ final class SharedRulesTest {
         check(!scene.profile.music && scene.profile.sound,"Music toggle is independent of sound effects");
         click(scene,"music"); check(scene.profile.music,"Music can be reenabled"); scene.back(); click(scene,"resume");
         scene.model.launch(0,1,.5); scene.model.elapsed = 15; click(scene,"restart");
+        click(scene,"confirm_replace");
         check(scene.model.levelIndex == 1 && scene.model.elapsed == 0 && scene.model.unitsSent == 0 && scene.model.troops.isEmpty(),"Toolbar restart starts a clean attempt of the same sector");
     }
 

@@ -7,7 +7,7 @@ $java = Join-Path $jdkHome.FullName 'bin\java.exe'
 $classes = Join-Path $projectRoot 'build\tests'
 New-Item -ItemType Directory -Force -Path $classes | Out-Null
 $sourceRoot = Join-Path $projectRoot 'app\src\main\java\com\frontline\offline'
-$sources = @((Join-Path $sourceRoot 'GameModel.java'),(Join-Path $sourceRoot 'GameScene.java'),(Join-Path $sourceRoot 'Campaign.java'))
+$sources = @((Join-Path $sourceRoot 'GameModel.java'),(Join-Path $sourceRoot 'GameScene.java'),(Join-Path $sourceRoot 'Campaign.java'),(Join-Path $sourceRoot 'Challenge.java'),(Join-Path $sourceRoot 'Progress.java'),(Join-Path $sourceRoot 'PlaytestLog.java'))
 $sources += (Get-ChildItem -LiteralPath (Join-Path $projectRoot 'tests'),(Join-Path $projectRoot 'tools') -Recurse -Filter '*.java').FullName
 & $javac '-encoding' 'UTF-8' '-d' $classes @sources
 if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }

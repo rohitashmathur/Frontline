@@ -24,7 +24,7 @@ $musicClasses = Join-Path $projectRoot 'build\music'
 New-Item -ItemType Directory -Force -Path $musicClasses | Out-Null
 Invoke-Checked 'javac.exe' @('-d',$musicClasses,(Join-Path $projectRoot 'tools\com\frontline\offline\MusicGenerator.java'))
 Invoke-Checked 'java.exe' @('-cp',$musicClasses,'com.frontline.offline.MusicGenerator',(Join-Path $projectRoot 'app\src\main\res\raw\frontier_theme.wav'))
-Invoke-Checked (Join-Path $buildTools 'aapt.exe') @('package','-f','-m','--debug-mode','-J',$generated,'-M',(Join-Path $projectRoot 'app\src\main\AndroidManifest.xml'),'-S',(Join-Path $projectRoot 'app\src\main\res'),'-I',$androidJar,'-F',$unsignedApk,'--version-code','6','--version-name','0.6.0')
+Invoke-Checked (Join-Path $buildTools 'aapt.exe') @('package','-f','-m','--debug-mode','-J',$generated,'-M',(Join-Path $projectRoot 'app\src\main\AndroidManifest.xml'),'-S',(Join-Path $projectRoot 'app\src\main\res'),'-I',$androidJar,'-F',$unsignedApk,'--version-code','10','--version-name','0.10.0')
 $sourceFiles = @((Get-ChildItem -LiteralPath (Join-Path $projectRoot 'app\src\main\java'),$generated -Recurse -Filter '*.java').FullName)
 Invoke-Checked 'javac.exe' (@('-encoding','UTF-8','-source','8','-target','8','-classpath',$androidJar,'-d',$classes) + $sourceFiles)
 $classesJar = Join-Path $buildRoot 'classes.jar'

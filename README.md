@@ -1,12 +1,30 @@
 # Frontline
 
-An original offline Android territory-conquest game. **V6 / 0.6.0** has 60 sectors across ten story chapters, up to five computer opponents, local scores/progression, music, an interactive tutorial and saved battles. No login, backend, network permission, ads or telemetry.
+An original offline Android territory-conquest game. **V10 / 0.10.0** has 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, difficulty-specific records, mastery rewards, music, practical tutorials and saved battles. No login, backend, network permission, ads or remote telemetry.
 
 ## Install
 
-[Download Frontline V6 APK](https://github.com/rohitashmathur/Frontline/releases/tag/v0.6.0) from the private repository's release assets. Android 7.0 or newer is required. Local build output is `build/Frontline-debug.apk`; the versioned distribution copy is `build/FrontlineV6.apk`.
+Android 7.0 or newer is required. The versioned build is `build/FrontlineV10.apk`; the build script produces `build/Frontline-debug.apk`. See the [V10 release](https://github.com/rohitashmathur/Frontline/releases/tag/v0.10.0) for the review APK. This is a prototype debug-signed build, not a Play Store release.
 
-Install over V5 to retain local progress; do not uninstall first. The package and original prototype signing key are unchanged. Existing overfilled V5 garrisons are clamped to the new 100/125 limits, while armies already in flight retain their units.
+Install over V7, V6 or V5 to retain local progress; do not uninstall first. The package and original prototype signing key are unchanged. Historical records remain marked Legacy because their attempt difficulty is unknown. Existing overfilled V5 garrisons are clamped to the 100/125 limits, while armies already in flight retain their units.
+
+## V10 Changes
+
+- Continue Battle is the primary action for an unfinished attempt. New Attempt opens a briefing; replacing or restarting an active battle requires confirmation. Selecting a sector does not discard it.
+- Practical capture, reinforcement, deployment and king-control tutorial steps, replay/skip, optional advanced Rules, and opening-sector tactical prompts.
+- Sent/remaining troop previews, MAX labels, actual capture/interception/king/cap-loss feedback, distinct faction symbols and first-large-map camera guidance.
+- Pre-run star targets, actual time versus target, best-time improvement, records by attempt difficulty, and one factual result insight. Settings difficulty applies to the next attempt.
+- Opt-in local playtest logging, bounded to 500 events, with manual CSV export through Android's document picker. Pauses are not abandonments.
+- Separate configurable hold-king, retain-starting-king and deployment-budget objectives. Nine curated missions; campaign unlocks remain independent.
+- Pressure and Guardian AI styles change targeting, reserves and coordination, not production rates. Old saved battles retain the classic AI.
+- Daily missions reset at 00:00 UTC, use a date/version seed and fixed Normal difficulty, and retain their original identity across midnight and process restarts. Local daily bests retain the latest 60 dates.
+- Three measurable mastery badges and earned Signal/Blueprint visual themes. Cosmetics do not change combat rules or faction colours.
+
+Scope: A1-A6 and B1-B4 from the supplied priorities. A7 balance/human playtesting and C1-C3 remain separate. Mission timers/budgets and replay interest are not claimed to be human-validated.
+
+## V7 Changes
+
+Settings now includes **Enter Code**. Enter exactly `12345` and select Unlock (or the keyboard's Done action) to unlock every sector. Empty or incorrect codes show an inline error and change nothing; Cancel leaves progression unchanged. Unlocking persists locally, preserves existing scores/preferences/saved battles, and does not mark unplayed sectors as cleared. The shortcut is available from both main-menu and battle Settings; it is not a security or authentication feature.
 
 ## V6 Changes
 
@@ -22,10 +40,11 @@ Install over V5 to retain local progress; do not uninstall first. The package an
 ## Documentation
 
 - [Application Architecture and Flow Diagrams](docs/architecture.md)
-- [Complete V6 Game Logic and Balance Rules](docs/game-rules-v6.md)
+- [V10 Game Logic and Preserved Balance Rules](docs/game-rules-v10.md)
+- [V10 Acceptance and Verification](docs/verification-v10.md)
 - [Native Android Screenshots](docs/screenshots.md)
 
-<img src="docs/screenshots/battle-five-opponents.png" width="240" alt="Frontline V6 with five opponents" /> <img src="docs/screenshots/tutorial-boost.png" width="240" alt="Interactive king booster tutorial" />
+<img src="docs/screenshots/v10-menu.png" width="240" alt="V10 main menu protects unfinished battles" /> <img src="docs/screenshots/v10-challenges.png" width="240" alt="V10 objective mission selection" />
 
 ## Play
 
@@ -33,7 +52,7 @@ Drag from a green tile to attack or reinforce another tile. Choose 25%, 50% or 1
 
 On large maps, +/- changes zoom and the fit icon restores the whole board. Two-finger pinch/drag pans and zooms; when zoomed, dragging from a neutral/enemy/empty area pans instead of deploying. One-finger drags starting on your own tile still send troops. Long-press tool icons for their names.
 
-Use the main menu to Play, Resume, choose a sector, replay How to Play or change settings. Scores, stars, best times, unlocks, settings and unfinished battles are saved locally. Winning unlocks the next sector. Pause/Main Menu freezes and retains the round; Play/Restart begins a fresh attempt. Uninstalling or clearing app data removes saves.
+Use the main menu to continue, select a sector, start a new attempt, choose a mission, review mastery or change settings. Scores, stars, best times, unlocks, settings and unfinished battles are saved locally. Campaign wins unlock the next sector; mission wins do not. Pause/Main Menu retains the round; replacing an unfinished attempt requires confirmation. Uninstalling or clearing app data removes saves.
 
 ## Repository Layout
 
@@ -41,10 +60,10 @@ Use the main menu to Play, Resume, choose a sector, replay How to Play or change
 | --- | --- |
 | `app/` and root Gradle files | Native Android app, campaign, portable battle rules and assets |
 | `scripts/` | Windows setup, build and Android/portable verification |
-| `tests/` | Core and V6 regression tests |
-| `android-tests/` | Separate test-only Android multi-touch instrumentation |
+| `tests/` | Core, V5-V7 regression and V10 feature tests |
+| `android-tests/` | Separate test-only native flow and multi-touch instrumentation |
 | `tools/` | Rendering adapters, deterministic test saves and original music generation |
-| `docs/` | Architecture, diagrams, V6 rules and native screenshots |
+| `docs/` | Architecture, diagrams, versioned rules, acceptance and native screenshots |
 | `ios/` | Future iOS placeholder; not implemented |
 | `backend/` | Future optional service placeholder; not implemented |
 
@@ -74,12 +93,16 @@ The portable suite runs all 60 maps on all three difficulties and checks dispatc
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-emulator.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-test-device.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\device-smoke-test.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-unlock-code.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-gestures.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v10.ps1
 ```
 
-The native smoke test uses Android 15, airplane mode and the named `emulator-5580`. It verifies the five-step tutorial, expanded quarter swipe, music/lifecycle, saves, ten chapters, five rivals, zoom/pan/fit, king bonuses, caps, resignation, restart, campaign ending and V5 upgrade. It then calls `test-android-gestures.ps1` to test real multi-pointer events, pinch/pan drag cancellation and nonblank native battle pixels at phone/tablet sizes using a separate test-only APK, which is removed afterwards. Put the actual previous `FrontlineV5.apk` in `build/` for the real binary upgrade check; otherwise legacy save fixtures still verify migration. Captures go to `build/device/`; test fixtures/tools are not packaged in the game APK. Stop the test emulator after use.
+The current native scripts use Android 15 and only the named `emulator-5580`; test fixtures never target a physical phone. Put the actual previous `FrontlineV6.apk` in `build/` for the upgrade check. The separate test-only instrumentation APK verifies real Android touch/lifecycle flows and captures Canvas pixels at three phone/tablet sizes, then is removed. Captures go to `build/device/`; fixtures/tools are not packaged in the game APK. `device-smoke-test.ps1` is the historical V6 flow script, not the V10 acceptance runner. Stop the emulator after use.
 
-See [Verification Results](docs/verification-v6.md) for the final V6 test count, native results and distribution checksum.
+For V7's code dialog and real V6 upgrade check, run `scripts/test-unlock-code.ps1` after starting the dedicated emulator. Keep the actual V6 APK at `build/FrontlineV6.apk`. The test uses real native input, verifies wrong/empty/cancelled codes, confirms saved data is unchanged apart from unlocks, restarts the app, and selects/plays Sector 60. It also checks the dialog on a small phone viewport.
+
+See [V7 Verification Results](docs/verification-v7.md) for the local APK checksum and current results. The earlier [V6 Verification Results](docs/verification-v6.md) remain a historical report.
 
 ## Prototype Limits
 

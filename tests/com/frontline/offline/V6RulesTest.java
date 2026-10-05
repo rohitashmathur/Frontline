@@ -128,7 +128,8 @@ final class V6RulesTest {
     private static void tutorialAndCamera() throws Exception {
         GameScene scene = new GameScene(new GameScene.Profile(),quiet(36,1),SILENT); scene.back();
         byte[] retained = scene.model.save(); click(scene,"tutorial"); click(scene,"tutorial_next");
-        scene.down(110,225); scene.up(310,225); click(scene,"tutorial_next"); click(scene,"tutorial_next");
+        scene.down(110,225); scene.up(310,225); click(scene,"tutorial_next");
+        click(scene,"demo_quarter"); click(scene,"demo_half"); click(scene,"demo_all"); scene.down(110,225); scene.up(310,225); click(scene,"tutorial_next");
         for (int i = 1; i <= 5; i++) {
             click(scene,"demo_capture"); GameModelTest.TextGraphics labels = new GameModelTest.TextGraphics(); scene.render(labels,700);
             String expected = new String[] {"1.20","1.44","1.73","3.00","3.60"}[i-1];
@@ -154,7 +155,7 @@ final class V6RulesTest {
         a = scene.position(0); b = scene.position(1); scene.model.territories.get(0).owner = 0;
         scene.down(a[0],a[1]); scene.cameraGesture(210,350,1.1f,0,0); scene.up(b[0],b[1]);
         check(scene.model.unitsSent == 0,"A pinch gesture cancels any armed troop drag");
-        click(scene,"restart"); scene.render(new GameModelTest.NullGraphics(),700);
+        click(scene,"restart"); click(scene,"confirm_replace"); click(scene,"camera_ready"); scene.render(new GameModelTest.NullGraphics(),700);
         check(Math.abs(distance(scene.position(0),scene.position(1))-fitted) < .001,"Restart also resets camera framing");
     }
     private static void coverage() throws Exception {

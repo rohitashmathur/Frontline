@@ -60,7 +60,7 @@ public final class NativeGestureTest extends Instrumentation {
                     view.draw(new Canvas(bitmap));
                     int populated = 0;
                     int bottom = (int)read(view,"safeBottom");
-                    for (int py = top+(int)(204*scale); py < view.getHeight()-bottom-149*scale; py += 8)
+                    for (int py = top+(int)(244*scale); py < view.getHeight()-bottom-149*scale; py += 8)
                         for (int px = 0; px < view.getWidth(); px += 8) if (bitmap.getPixel(px,py) != 0xFF17191B) populated++;
                     if (populated < 100) throw new AssertionError("Native battlefield pixels are blank");
                     File output = new File(activity.getExternalFilesDir(null),shot+".png");

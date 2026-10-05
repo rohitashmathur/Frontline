@@ -9,10 +9,16 @@ import java.util.ArrayList;
 import java.util.Random;
 
 public final class GameModel {
+    public static final int RULES_VERSION = 10;
+    public static final int CLASSIC = 0, PRESSURE = 1, GUARDIAN = 2;
+    public static final int CAPTURE_EVENT = 1, INTERCEPT_EVENT = 2, KING_GAIN_EVENT = 3,
+        KING_LOSS_EVENT = 4, CAP_LOSS_EVENT = 5, HOME_KING_LOSS_EVENT = 6;
     public static final int NEUTRAL = -1, PLAYER = 0;
     public static final int PLAYING = 0, WON = 1, LOST = 2;
     public static final int NORMAL_CAP = 100, MAX_TROOPS = 125, MAX_CONVOYS = 900, MAX_TEAMS = 6;
     private static final int LEGACY_MAX_TROOPS = 1_000_000;
+    private static final int CAMPAIGN = 0, HOLD_KING = 1, KEEP_KING = 2, BUDGET = 3;
+    private static final int MAX_EVENTS = 432;
     public static final String[] DIFFICULTIES = {"Easy", "Normal", "Hard"};
     public static final Level[] LEVELS = {
         new Level("First Contact", 3, 2, 1, new int[] {}, 70),
@@ -130,6 +136,26 @@ public final class GameModel {
         Clash(float x,float y) { this.x = x; this.y = y; }
     }
 
+    public static final class BattleEvent {
+        public final int type, tile, units;
+        BattleEvent(int type, int tile, int units) { this.type = type; this.tile = tile; this.units = units; }
+    }
+
+    private static final class StatefulRandom extends Random {
+        private static final long MULTIPLIER = 0x5DEECE66DL, MASK = (1L << 48)-1;
+        private long state;
+        StatefulRandom(long seed) { super(seed); }
+        @Override public synchronized void setSeed(long seed) {
+            super.setSeed(seed); state = (seed ^ MULTIPLIER) & MASK;
+        }
+        @Override protected synchronized int next(int bits) {
+            // Mirror Java's LCG without replacing its sampling or rejection behavior.
+            state = (state*MULTIPLIER+0xBL) & MASK;
+            return super.next(bits);
+        }
+        void restoreState(long value) { setSeed(value ^ MULTIPLIER); }
+    }
+
     private static final class Collision {
         final int a, b; final float time;
         Collision(int a,int b,float time) { this.a = a; this.b = b; this.time = time; }
@@ -141,16 +167,24 @@ public final class GameModel {
     public final int levelIndex;
     public int difficulty, outcome = PLAYING, captures, unitsLost, unitsSent;
     public float elapsed;
+    public long seed;
+    public boolean seedKnown = true, historyKnown = true, startingKingLost;
+    public int rulesVersion = RULES_VERSION, aiVersion, intercepted, cappedReinforcements;
+    public int objectiveType = CAMPAIGN, objectiveTarget = -1, deploymentBudget, challengeId = -1;
+    public float objectiveSeconds, objectiveProgress;
+    public String dailyDate = "";
     private final float[] aiTimers = new float[MAX_TEAMS];
     public final boolean[] resigned = new boolean[MAX_TEAMS];
     private float dominanceSeconds;
-    private final Random random;
+    private final StatefulRandom random;
     private final ArrayList<Collision> collisions = new ArrayList<>();
+    private final ArrayList<BattleEvent> events = new ArrayList<>();
+    private float heldSecondsThisTick;
 
     public GameModel(int levelIndex, int difficulty, long seed) {
         if (levelIndex < 0 || levelIndex >= LEVELS.length) throw new IllegalArgumentException("Level");
         if (difficulty < 0 || difficulty > 2) throw new IllegalArgumentException("Difficulty");
-        this.levelIndex = levelIndex; this.difficulty = difficulty; random = new Random(seed);
+        this.levelIndex = levelIndex; this.difficulty = difficulty; this.seed = seed; random = new StatefulRandom(seed);
         Level level = level();
         int[] cells = new int[level.columns*level.rows];
         java.util.Arrays.fill(cells,-1);
@@ -199,6 +233,61 @@ public final class GameModel {
 
     public Level level() { return LEVELS[levelIndex]; }
 
+    public int originalKing(int owner) {
+        for (Territory tile : territories) if (tile.capital && tile.originalOwner == owner && owner != NEUTRAL) return tile.id;
+        return -1;
+    }
+
+    public int personality(int owner) {
+        if (aiVersion == 0 || owner <= PLAYER || owner > level().opponents) return CLASSIC;
+        int faction = level().faction(owner);
+        return faction == 1 || faction == 3 ? PRESSURE : GUARDIAN;
+    }
+
+    public static String styleName(int style) {
+        return style == PRESSURE ? "Pressure" : style == GUARDIAN ? "Guardian" : "Classic";
+    }
+
+    public ArrayList<BattleEvent> drainEvents() {
+        ArrayList<BattleEvent> result = new ArrayList<>(events); events.clear(); return result;
+    }
+
+    private static int addCounter(int value,int amount) { return (int)Math.min(Integer.MAX_VALUE,(long)value+amount); }
+
+    private void event(int type,int tile,int units) {
+        for (int i = 0; i < events.size(); i++) {
+            BattleEvent previous = events.get(i);
+            if (previous.type == type && previous.tile == tile) {
+                events.set(i,new BattleEvent(type,tile,addCounter(previous.units,units))); return;
+            }
+        }
+        if (events.size() < MAX_EVENTS) events.add(new BattleEvent(type,tile,units));
+    }
+
+    public void configureChallenge(int type,int target,float seconds,int budget) {
+        if (elapsed != 0 || outcome != PLAYING || captures != 0 || unitsLost != 0 || unitsSent != 0
+            || intercepted != 0 || cappedReinforcements != 0 || startingKingLost || !troops.isEmpty()
+            || objectiveType != CAMPAIGN || rulesVersion != RULES_VERSION || !historyKnown || !seedKnown)
+            throw new IllegalStateException("Challenge requires a fresh battle");
+        for (boolean surrendered : resigned) if (surrendered) throw new IllegalStateException("Challenge requires a fresh battle");
+        if (!validObjective(type,target,seconds,budget) || type == CAMPAIGN
+            || type == HOLD_KING && territories.get(target).owner <= PLAYER
+            || territories.get(originalKing(PLAYER)).owner != PLAYER)
+            throw new IllegalArgumentException("Invalid challenge");
+        objectiveType = type; objectiveTarget = target; objectiveSeconds = seconds;
+        deploymentBudget = budget; objectiveProgress = 0;
+    }
+
+    private boolean validObjective(int type,int target,float seconds,int budget) {
+        if (!Float.isFinite(seconds)) return false;
+        if (type == CAMPAIGN) return target == -1 && seconds == 0 && budget == 0;
+        if (type == BUDGET) return (target == -1 || target == originalKing(PLAYER)) && seconds == 0 && budget > 0;
+        if (type != HOLD_KING && type != KEEP_KING || seconds <= 0 || seconds > 86400 || budget != 0) return false;
+        if (type == KEEP_KING) return target == -1 || target == originalKing(PLAYER);
+        return target >= 0 && target < territories.size() && territories.get(target).capital
+            && territories.get(target).originalOwner > PLAYER;
+    }
+
     public int launch(int sourceId, int targetId, double fraction) {
         if (outcome != PLAYING || sourceId < 0 || targetId < 0 || sourceId == targetId
             || sourceId >= territories.size() || targetId >= territories.size()
@@ -218,13 +307,18 @@ public final class GameModel {
             troop.units = (remaining+packets-i-1)/(packets-i); remaining -= troop.units;
             troops.add(troop);
         }
-        if (source.owner == PLAYER) unitsSent = (int)Math.min(Integer.MAX_VALUE,(long)unitsSent+amount);
+        if (source.owner == PLAYER) {
+            boolean overBudget = objectiveType == BUDGET && (long)unitsSent+amount > deploymentBudget;
+            unitsSent = addCounter(unitsSent,amount);
+            if (overBudget) outcome = LOST;
+        }
         return amount;
     }
 
     public void update(float seconds) {
         if (outcome != PLAYING || !Float.isFinite(seconds) || seconds <= 0) return;
         float dt = Math.min(seconds, .1f);
+        heldSecondsThisTick = objectiveType == HOLD_KING && territories.get(objectiveTarget).owner == PLAYER ? dt : 0;
         elapsed += dt;
         for (int i = clashes.size()-1; i >= 0; i--) {
             clashes.get(i).remaining -= dt;
@@ -261,16 +355,42 @@ public final class GameModel {
     private void arrive(Troop troop) {
         Territory target = territories.get(troop.target);
         if (target.owner == troop.owner) {
-            target.troops = Math.min(troopCap(target),target.troops+troop.units);
+            capArrival(target,target.troops+troop.units);
         } else {
             int defenders = target.count(), lost = Math.min(defenders,troop.units);
-            if (troop.owner == PLAYER || target.owner == PLAYER) unitsLost += lost;
+            if (troop.owner == PLAYER || target.owner == PLAYER) unitsLost = addCounter(unitsLost,lost);
             if (troop.units <= defenders) target.troops -= troop.units;
             else {
-                target.owner = troop.owner; target.troops = troop.units-defenders;
-                target.troops = Math.min(troopCap(target),target.troops);
-                if (troop.owner == PLAYER) captures++;
+                transfer(target,troop.owner,troop.units-defenders,Math.min(.1f,Math.max(0,troop.age-troop.duration)));
+                capArrival(target,troop.units-defenders);
             }
+        }
+    }
+
+    private void capArrival(Territory target,double total) {
+        int discarded = (int)Math.floor(Math.max(0,total-troopCap(target))+.00001);
+        target.troops = Math.min(troopCap(target),total);
+        if (target.owner == PLAYER && discarded > 0) {
+            cappedReinforcements = addCounter(cappedReinforcements,discarded);
+            event(CAP_LOSS_EVENT,target.id,discarded);
+        }
+    }
+
+    private void transfer(Territory target,int owner,int units,float heldSeconds) {
+        int previous = target.owner;
+        if (previous == owner) return;
+        if (objectiveType == HOLD_KING && target.id == objectiveTarget) {
+            objectiveProgress = 0; heldSecondsThisTick = owner == PLAYER ? heldSeconds : 0;
+        }
+        if (previous == PLAYER && target.capital) {
+            if (target.originalOwner == PLAYER) {
+                startingKingLost = true; event(HOME_KING_LOSS_EVENT,target.id,1);
+            } else event(KING_LOSS_EVENT,target.id,1);
+        }
+        target.owner = owner;
+        if (owner == PLAYER) {
+            captures = addCounter(captures,1); event(CAPTURE_EVENT,target.id,units);
+            if (target.capital && target.originalOwner != PLAYER) event(KING_GAIN_EVENT,target.id,1);
         }
     }
 
@@ -292,7 +412,10 @@ public final class GameModel {
             int canceled = Math.min(a.units,b.units);
             if (canceled == 0) continue;
             a.units -= canceled; b.units -= canceled;
-            if (a.owner == PLAYER || b.owner == PLAYER) unitsLost += canceled;
+            if (a.owner == PLAYER || b.owner == PLAYER) {
+                unitsLost = addCounter(unitsLost,canceled); intercepted = addCounter(intercepted,canceled);
+                event(INTERCEPT_EVENT,a.owner == PLAYER ? a.target : b.target,canceled);
+            }
             if (clashes.size() < 48) {
                 Territory source = territories.get(a.source), target = territories.get(a.target);
                 float p = (a.age+collision.time)/a.duration;
@@ -347,7 +470,7 @@ public final class GameModel {
             if (resigned[owner] || army(owner) == 0 && owned(owner) == 0 || canRecapture(owner)) continue;
             resigned[owner] = true;
             for (Territory territory : territories) if (territory.owner == owner) {
-                territory.owner = PLAYER; captures++;
+                transfer(territory,PLAYER,territory.count(),0);
             }
             for (int i = troops.size()-1; i >= 0; i--) if (troops.get(i).owner == owner) troops.remove(i);
         }
@@ -373,8 +496,18 @@ public final class GameModel {
             if (troop.owner == PLAYER) playerAlive = true;
             if (troop.owner > PLAYER) enemiesAlive = true;
         }
-        if (!playerAlive) outcome = LOST;
-        else if (!enemiesAlive) outcome = WON;
+        if (objectiveType == HOLD_KING) {
+            if (territories.get(objectiveTarget).owner != PLAYER) objectiveProgress = 0;
+            else objectiveProgress = Math.min(objectiveSeconds,objectiveProgress+heldSecondsThisTick);
+        } else if (objectiveType == KEEP_KING) {
+            objectiveProgress = Math.min(objectiveSeconds,elapsed);
+            if (territories.get(originalKing(PLAYER)).owner != PLAYER) startingKingLost = true;
+        }
+        if (!playerAlive || objectiveType == KEEP_KING && startingKingLost
+            || objectiveType == BUDGET && unitsSent > deploymentBudget) outcome = LOST;
+        else if (objectiveType == HOLD_KING || objectiveType == KEEP_KING) {
+            if (objectiveProgress >= objectiveSeconds) outcome = WON;
+        } else if (!enemiesAlive) outcome = WON;
     }
 
     private void playAi(int owner) {
@@ -399,6 +532,7 @@ public final class GameModel {
                     if (shortage < 0 || threat == 0 || travel > lastArrival(target.id,owner,false)) continue;
                     amount = Math.min(capacity,shortage+4);
                     score = 70 + Math.min(30,shortage) - distance*4;
+                    if (personality(owner) == GUARDIAN && target.capital) score += 32;
                 } else {
                     amount = captureBudget(target,owner,travel);
                     if (amount <= 0 || amount > capacity) continue;
@@ -407,14 +541,18 @@ public final class GameModel {
                 if (score > bestScore) { bestScore = score; bestSource = source; bestTarget = target; bestAmount = amount; }
             }
         }
+        if (personality(owner) != CLASSIC && difficulty > 0 && coordinateAttack(owner,available,bestScore,true)) return;
         if (bestSource != null) {
             launch(bestSource.id,bestTarget.id,(bestAmount+.01)/bestSource.count());
         } else if (difficulty > 0) coordinateAttack(owner,available);
     }
 
     private int defensiveReserve(Territory source, int owner) {
+        int style = personality(owner);
         int minimum = (source.capital ? 8 : 4)+difficulty*2;
-        int reserve = Math.max(minimum,(int)Math.ceil(source.count()*(.18+difficulty*.04)));
+        if (style == GUARDIAN && source.capital) minimum += 6;
+        double fraction = style == PRESSURE ? .12 : style == GUARDIAN ? .28 : .18;
+        int reserve = Math.max(minimum,(int)Math.ceil(source.count()*(fraction+difficulty*.04)));
         int hostile = incoming(source.id,owner,false);
         int timely = incomingBefore(source.id,owner,true,firstArrival(source.id,owner,false));
         reserve = Math.max(reserve,hostile-timely+3);
@@ -448,19 +586,30 @@ public final class GameModel {
         double preference = target.owner == NEUTRAL ? 7-difficulty*3 : difficulty*3;
         double variation = random.nextDouble()*(difficulty == 0 ? 6 : difficulty == 1 ? 3 : 1.5);
         double recovery = difficulty > 0 && target.capital && target.originalOwner == owner ? (difficulty == 1 ? 20 : 34) : 0;
-        return 26+preference+(target.capital ? 2 : 0)+recovery-amount*.32-distance*4+variation;
+        int style = personality(owner);
+        double priority = 0;
+        if (target.capital) {
+            if (style == PRESSURE && target.originalOwner != owner) priority = 22+(target.owner == PLAYER ? 8 : 0);
+            if (style == GUARDIAN && target.originalOwner == owner) priority = 40;
+        }
+        return 26+preference+(target.capital ? 2 : 0)+recovery-amount*.32-distance*4+variation+priority;
     }
 
     private void coordinateAttack(int owner, int[] available) {
+        coordinateAttack(owner,available,-Double.MAX_VALUE,false);
+    }
+
+    private boolean coordinateAttack(int owner,int[] available,double minimumScore,boolean priorityOnly) {
         Territory targetChoice = null;
         double bestScore = -Double.MAX_VALUE;
         int bestAmount = 0, bestCapacity = 0;
         ArrayList<Territory> bestSources = null;
         ArrayList<Territory> attackers = new ArrayList<>();
         for (Territory source : territories) if (source.owner == owner && available[source.id] >= 5) attackers.add(source);
-        if (attackers.size() < 2) return;
+        if (attackers.size() < 2) return false;
         for (Territory target : territories) {
             if (target.owner == owner) continue;
+            if (priorityOnly && (!target.capital || personality(owner) == GUARDIAN && target.originalOwner != owner)) continue;
             attackers.sort((a,b) -> Float.compare(distance(a,target),distance(b,target)));
             int capacity = 0, amount = 0;
             float travel = 0, totalDistance = 0;
@@ -474,12 +623,13 @@ public final class GameModel {
             }
             if (sources.size() < 2 || amount <= 0 || capacity < amount || troops.size() >= MAX_CONVOYS) continue;
             double score = attackScore(target,owner,amount,totalDistance/sources.size())-2;
+            if (priorityOnly) score += personality(owner) == PRESSURE ? 16 : 26;
             if (score > bestScore) {
                 bestScore = score; targetChoice = target; bestSources = sources;
                 bestAmount = amount; bestCapacity = capacity;
             }
         }
-        if (targetChoice == null) return;
+        if (targetChoice == null || bestScore <= minimumScore) return false;
         for (Territory source : bestSources) {
             int capacity = available[source.id];
             int amount = Math.min(capacity,(int)Math.ceil((double)bestAmount*capacity/bestCapacity));
@@ -487,6 +637,7 @@ public final class GameModel {
             bestCapacity -= capacity;
             if (bestAmount <= 0) break;
         }
+        return true;
     }
 
     private float lastArrival(int target, int owner, boolean friendly) {
@@ -550,9 +701,10 @@ public final class GameModel {
     }
 
     public byte[] save() throws IOException {
+        if (dailyDate == null) throw new IOException("Invalid challenge identity");
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(bytes);
-        out.writeInt(0x464C3033); out.writeInt(levelIndex); out.writeInt(difficulty);
+        out.writeInt(0x464C3034); out.writeInt(levelIndex); out.writeInt(difficulty);
         out.writeFloat(elapsed); out.writeInt(outcome); out.writeInt(captures);
         out.writeInt(unitsLost); out.writeInt(unitsSent);
         out.writeInt(territories.size());
@@ -566,6 +718,11 @@ public final class GameModel {
         for (float timer : aiTimers) out.writeFloat(timer);
         out.writeFloat(dominanceSeconds);
         for (boolean surrendered : resigned) out.writeBoolean(surrendered);
+        out.writeLong(seed); out.writeBoolean(seedKnown); out.writeBoolean(historyKnown); out.writeBoolean(startingKingLost);
+        out.writeInt(rulesVersion); out.writeInt(aiVersion); out.writeInt(intercepted); out.writeInt(cappedReinforcements);
+        out.writeInt(objectiveType); out.writeInt(objectiveTarget); out.writeFloat(objectiveSeconds); out.writeFloat(objectiveProgress);
+        out.writeInt(deploymentBudget); out.writeInt(challengeId); out.writeUTF(dailyDate);
+        out.writeLong(random.state);
         out.flush(); return bytes.toByteArray();
     }
 
@@ -573,9 +730,9 @@ public final class GameModel {
         if (bytes == null || bytes.length > 50000) throw new IOException("Invalid save size");
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
         int version = in.readInt();
-        if (version != 0x464C3031 && version != 0x464C3032 && version != 0x464C3033) throw new IOException("Unknown save version");
+        if (version != 0x464C3031 && version != 0x464C3032 && version != 0x464C3033 && version != 0x464C3034) throw new IOException("Unknown save version");
         int level = in.readInt(), difficulty = in.readInt();
-        if (level < 0 || level >= LEVELS.length || version != 0x464C3033 && level >= 30 || difficulty < 0 || difficulty > 2) throw new IOException("Invalid level");
+        if (level < 0 || level >= LEVELS.length || version < 0x464C3033 && level >= 30 || difficulty < 0 || difficulty > 2) throw new IOException("Invalid level");
         GameModel model = new GameModel(level, difficulty, 100 + level);
         model.elapsed = in.readFloat(); model.outcome = in.readInt(); model.captures = in.readInt();
         model.unitsLost = in.readInt(); model.unitsSent = in.readInt();
@@ -600,11 +757,11 @@ public final class GameModel {
                 || !Float.isFinite(age) || age < -30 || age > duration || units < 1 || units > LEGACY_MAX_TROOPS) throw new IOException("Invalid convoy");
             Troop troop = new Troop(source,target,owner,duration,age); troop.units = units; model.troops.add(troop);
         }
-        for (int i = 0; i < (version == 0x464C3033 ? MAX_TEAMS : 4); i++) {
+        for (int i = 0; i < (version >= 0x464C3033 ? MAX_TEAMS : 4); i++) {
             model.aiTimers[i] = in.readFloat();
             if (!Float.isFinite(model.aiTimers[i]) || model.aiTimers[i] < 0 || model.aiTimers[i] > 10) throw new IOException("Invalid AI timer");
         }
-        if (version == 0x464C3033) {
+        if (version >= 0x464C3033) {
             model.dominanceSeconds = in.readFloat();
             if (!Float.isFinite(model.dominanceSeconds) || model.dominanceSeconds < 0 || model.dominanceSeconds > 10) throw new IOException("Invalid dominance timer");
             for (int i = 0; i < MAX_TEAMS; i++) {
@@ -613,7 +770,52 @@ public final class GameModel {
                 model.resigned[i] = flag == 1;
             }
         }
+        if (version == 0x464C3034) {
+            model.seed = in.readLong(); model.seedKnown = readFlag(in); model.historyKnown = readFlag(in);
+            model.startingKingLost = readFlag(in); model.rulesVersion = in.readInt(); model.aiVersion = in.readInt();
+            model.intercepted = in.readInt(); model.cappedReinforcements = in.readInt();
+            model.objectiveType = in.readInt(); model.objectiveTarget = in.readInt();
+            model.objectiveSeconds = in.readFloat(); model.objectiveProgress = in.readFloat();
+            model.deploymentBudget = in.readInt(); model.challengeId = in.readInt(); model.dailyDate = in.readUTF();
+            long state = in.readLong();
+            if (state < 0 || state > StatefulRandom.MASK) throw new IOException("Invalid random state");
+            model.random.restoreState(state);
+            model.validateV10();
+        } else {
+            model.seed = 0; model.seedKnown = false; model.historyKnown = false;
+            model.rulesVersion = 0; model.aiVersion = 0;
+        }
         if (in.available() != 0) throw new IOException("Unexpected save data");
         return model;
+    }
+
+    private static boolean readFlag(DataInputStream in) throws IOException {
+        int flag = in.readUnsignedByte();
+        if (flag > 1) throw new IOException("Invalid boolean");
+        return flag == 1;
+    }
+
+    private void validateV10() throws IOException {
+        boolean timed = objectiveType == HOLD_KING || objectiveType == KEEP_KING;
+        if (rulesVersion != 0 && rulesVersion != RULES_VERSION || aiVersion < 0 || aiVersion > 1
+            || rulesVersion == 0 && (seedKnown || historyKnown || seed != 0 || aiVersion != 0 || objectiveType != CAMPAIGN)
+            || rulesVersion == RULES_VERSION && (!seedKnown || !historyKnown)
+            || intercepted < 0 || intercepted > unitsLost || cappedReinforcements < 0)
+            throw new IOException("Invalid battle history");
+        if (!validObjective(objectiveType,objectiveTarget,objectiveSeconds,deploymentBudget)
+            || !Float.isFinite(objectiveProgress) || objectiveProgress < 0 || objectiveProgress > objectiveSeconds
+            || objectiveProgress > elapsed+.0001f)
+            throw new IOException("Invalid objective");
+        if (objectiveType == HOLD_KING && objectiveProgress > 0 && territories.get(objectiveTarget).owner != PLAYER
+            || objectiveType == KEEP_KING && (!startingKingLost && territories.get(originalKing(PLAYER)).owner != PLAYER
+                || startingKingLost && outcome != LOST || objectiveProgress != Math.min(objectiveSeconds,elapsed))
+            || objectiveType == BUDGET && unitsSent > deploymentBudget && outcome != LOST
+            || timed && outcome == PLAYING && objectiveProgress >= objectiveSeconds
+            || timed && outcome == WON && (objectiveProgress < objectiveSeconds || objectiveType == KEEP_KING && startingKingLost))
+            throw new IOException("Inconsistent objective state");
+        if (challengeId < -1 || challengeId >= Challenge.PRESETS.length || dailyDate == null
+            || objectiveType == CAMPAIGN && (challengeId != -1 || !dailyDate.isEmpty())
+            || !dailyDate.isEmpty() && (challengeId < 0 || !Challenge.validDate(dailyDate)))
+            throw new IOException("Invalid challenge identity");
     }
 }

@@ -1,7 +1,9 @@
 package com.frontline.offline;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Paint;
@@ -12,16 +14,27 @@ import android.media.ToneGenerator;
 import android.os.Bundle;
 import android.os.Build;
 import android.os.Handler;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.util.Base64;
 import android.view.HapticFeedbackConstants;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.WindowInsets;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 public final class MainActivity extends Activity {
     private BattleView battleView;
+    private static final int EXPORT_LOG = 1001;
+    private String pendingCsv;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -51,6 +64,20 @@ public final class MainActivity extends Activity {
         battleView.scene.back(); battleView.save(); battleView.invalidate();
     }
 
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
+        super.onActivityResult(requestCode,resultCode,data);
+        if (requestCode != EXPORT_LOG) return;
+        String csv = pendingCsv; pendingCsv = null;
+        if (resultCode != RESULT_OK || data == null || data.getData() == null || csv == null) return;
+        try (OutputStream output = getContentResolver().openOutputStream(data.getData())) {
+            if (output == null) throw new java.io.IOException("No writable destination");
+            output.write(csv.getBytes(StandardCharsets.UTF_8));
+            Toast.makeText(this,"Playtest CSV exported",Toast.LENGTH_SHORT).show();
+        } catch (Exception failed) {
+            Toast.makeText(this,"Could not export CSV",Toast.LENGTH_LONG).show();
+        }
+    }
+
     private static final class BattleView extends View implements GameScene.Events, GameScene.Graphics {
         private final SharedPreferences storage;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -61,6 +88,7 @@ public final class MainActivity extends Activity {
         private final GameScene scene;
         private final ToneGenerator audio;
         private final BackgroundMusic music;
+        private AlertDialog unlockDialog;
         private Canvas canvas;
         private float scale = 1, offsetX;
         private int safeTop, safeBottom;
@@ -98,7 +126,16 @@ public final class MainActivity extends Activity {
             profile.music = storage.getBoolean("music",true);
             profile.haptics = storage.getBoolean("haptics",true);
             profile.tutorialSeen = storage.getBoolean("tutorial-seen",false);
+            profile.cameraGuideSeen = storage.getBoolean("camera-guide-seen",false);
             profile.selectedSector = storage.getInt("selected-sector",0);
+            try {
+                String data = storage.getString("progress-v10",null);
+                if (data != null) profile.progress = Progress.restore(Base64.decode(data,Base64.DEFAULT));
+            } catch (Exception invalidProgress) { storage.edit().remove("progress-v10").apply(); }
+            try {
+                String data = storage.getString("playtest-v10",null);
+                if (data != null) profile.log = PlaytestLog.restore(Base64.decode(data,Base64.DEFAULT));
+            } catch (Exception invalidLog) { storage.edit().remove("playtest-v10").apply(); }
             for (int i = 0; i < profile.best.length; i++) {
                 profile.best[i] = Math.max(0,storage.getInt("best-"+i,0));
                 profile.stars[i] = Math.max(0,Math.min(3,storage.getInt("stars-"+i,0)));
@@ -123,7 +160,10 @@ public final class MainActivity extends Activity {
             music.pause();
         }
         void resume() { running = true; previousFrame = 0; music.resume(); invalidate(); }
-        void dispose() { handler.removeCallbacks(tooltip); music.dispose(); if (audio != null) audio.release(); }
+        void dispose() {
+            if (unlockDialog != null) unlockDialog.dismiss();
+            handler.removeCallbacks(tooltip); music.dispose(); if (audio != null) audio.release();
+        }
 
         @Override protected void onDraw(Canvas frame) {
             super.onDraw(frame);
@@ -178,6 +218,70 @@ public final class MainActivity extends Activity {
 
         @Override public boolean performClick() { super.performClick(); return true; }
         @Override public void changed() { music.setEnabled(scene.profile.music); save(); }
+        @Override public void exportPlaytestRequested() {
+            MainActivity activity = (MainActivity)getContext();
+            activity.pendingCsv = scene.profile.log.exportCsv();
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("text/csv"); intent.putExtra(Intent.EXTRA_TITLE,"Frontline-playtest.csv");
+            try { activity.startActivityForResult(intent,EXPORT_LOG); }
+            catch (RuntimeException unavailable) {
+                activity.pendingCsv = null;
+                Toast.makeText(getContext(),"No document exporter available",Toast.LENGTH_LONG).show();
+            }
+        }
+        @Override public void unlockCodeRequested() {
+            if (unlockDialog != null || scene.overlay != GameScene.SETTINGS) return;
+            EditText input = new EditText(getContext());
+            input.setId(android.R.id.edit);
+            input.setHint("Enter code");
+            input.setSingleLine(true);
+            input.setInputType(InputType.TYPE_CLASS_NUMBER);
+            input.setImeOptions(EditorInfo.IME_ACTION_DONE);
+            input.setFilters(new InputFilter[] {new InputFilter.LengthFilter(16)});
+            int spacing = Math.round(24*getResources().getDisplayMetrics().density);
+            LinearLayout container = new LinearLayout(getContext());
+            container.setOrientation(LinearLayout.VERTICAL);
+            container.setPadding(spacing,spacing/3,spacing,0);
+            container.addView(input,new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,LinearLayout.LayoutParams.WRAP_CONTENT));
+            TextView error = new TextView(getContext());
+            error.setText("Invalid code");
+            error.setTextSize(14);
+            error.setTextColor(GameScene.COLORS[1]);
+            error.setPadding(0,spacing/3,0,0);
+            error.setVisibility(View.INVISIBLE);
+            error.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+            container.addView(error);
+            AlertDialog dialog = new AlertDialog.Builder(getContext())
+                .setTitle("Unlock Sectors")
+                .setView(container)
+                .setNegativeButton("Cancel",null)
+                .setPositiveButton("Unlock",null)
+                .create();
+            Runnable submit = () -> {
+                if (!scene.redeemUnlockCode(input.getText().toString())) {
+                    error.setVisibility(View.VISIBLE);
+                    return;
+                }
+                dialog.dismiss();
+                Toast.makeText(getContext(),"All "+GameModel.LEVELS.length+" sectors unlocked",Toast.LENGTH_SHORT).show();
+                invalidate();
+            };
+            dialog.setOnShowListener(ignored -> {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> submit.run());
+                input.requestFocus();
+            });
+            dialog.setOnDismissListener(ignored -> { if (unlockDialog == dialog) unlockDialog = null; });
+            input.setOnEditorActionListener((field,action,event) -> {
+                if (action == EditorInfo.IME_ACTION_DONE || event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN) {
+                    submit.run(); return true;
+                }
+                return false;
+            });
+            unlockDialog = dialog;
+            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            dialog.show();
+        }
         @Override public void cue(int kind) {
             long now = System.nanoTime();
             if (kind == 1 && now-lastCaptureCue < 180_000_000L) return;
@@ -194,11 +298,14 @@ public final class MainActivity extends Activity {
             GameScene.Profile profile = scene.profile;
             edit.putInt("unlocked",profile.unlocked).putInt("difficulty",profile.difficulty).putInt("wins",profile.wins)
                 .putBoolean("sound",profile.sound).putBoolean("music",profile.music).putBoolean("haptics",profile.haptics)
-                .putBoolean("tutorial-seen",profile.tutorialSeen).putInt("selected-sector",profile.selectedSector);
+                .putBoolean("tutorial-seen",profile.tutorialSeen).putBoolean("camera-guide-seen",profile.cameraGuideSeen)
+                .putInt("selected-sector",profile.selectedSector);
             for (int i = 0; i < profile.best.length; i++) {
                 edit.putInt("best-"+i,profile.best[i]).putInt("stars-"+i,profile.stars[i]).putFloat("time-"+i,profile.times[i]);
             }
             try {
+                edit.putString("progress-v10",Base64.encodeToString(profile.progress.save(),Base64.NO_WRAP));
+                edit.putString("playtest-v10",Base64.encodeToString(profile.log.save(),Base64.NO_WRAP));
                 if (scene.hasBattle) edit.putString("battle",Base64.encodeToString(scene.model.save(),Base64.NO_WRAP));
                 else edit.remove("battle");
             }

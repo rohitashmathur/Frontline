@@ -39,6 +39,8 @@ public final class RenderPreview implements GameScene.Graphics {
                 press(menu,"demo_half"); render(menu,360,532,new File(output,"tutorial-half.png"));
                 press(menu,"demo_all"); render(menu,360,532,new File(output,"tutorial-all.png"));
                 press(menu,"demo_quarter");
+                menu.render(new GameModelTest.NullGraphics(),700);
+                menu.down(110,225); menu.up(310,225);
             }
             if (step == 3) {
                 for (int i = 0; i < 4; i++) press(menu,"demo_capture");
@@ -60,6 +62,8 @@ public final class RenderPreview implements GameScene.Graphics {
         scene.overlay = GameScene.PAUSE;
         render(scene,360,640,new File(output,"pause.png"));
         scene.overlay = GameScene.SETTINGS;
+        render(scene,360,532,new File(output,"settings-small.png"));
+        render(scene,420,900,new File(output,"settings-tall.png"));
         render(scene,360,640,new File(output,"settings.png"));
         profile.unlocked = 2; profile.best[0] = 2180; profile.stars[0] = 3; profile.times[0] = 47;
         scene.overlay = GameScene.SECTORS;
@@ -101,6 +105,19 @@ public final class RenderPreview implements GameScene.Graphics {
         render(scene,360,532,new File(output,"wide-map-fit.png"));
         scene.cameraGesture(210,350,2,0,0); render(scene,360,532,new File(output,"wide-map-zoom.png"));
         scene.cameraGesture(210,350,1,150,-120); render(scene,420,900,new File(output,"wide-map-pan.png"));
+        for (int view : new int[] {GameScene.CHALLENGES,GameScene.DAILY,GameScene.MASTERY,GameScene.HELP}) {
+            scene.overlay = view;
+            render(scene,360,532,new File(output,"v10-view-"+view+"-small.png"));
+            render(scene,420,900,new File(output,"v10-view-"+view+"-tall.png"));
+            render(scene,1200,800,new File(output,"v10-view-"+view+"-tablet.png"));
+        }
+        scene.overlay = GameScene.MENU; press(scene,"play");
+        render(scene,360,532,new File(output,"v10-briefing-small.png"));
+        render(scene,420,900,new File(output,"v10-briefing-tall.png"));
+        press(scene,"begin_attempt");
+        render(scene,360,532,new File(output,"v10-confirm-small.png"));
+        scene.overlay = GameScene.CAMERA_HELP;
+        render(scene,360,532,new File(output,"v10-camera-guide.png"));
         System.out.println("Rendered all 60 maps, ten chapter pages/endings, five tutorial steps, and zoom/pan states at compact and tall sizes.");
     }
 
