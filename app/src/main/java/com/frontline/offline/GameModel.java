@@ -13,12 +13,13 @@ public final class GameModel {
     public static final int TERMINAL_NONE = 0, TERMINAL_BUDGET = 1, TERMINAL_PROTECTED_KING = 2,
         TERMINAL_ELIMINATED = 3, TERMINAL_SURRENDER = 4, TERMINAL_LEGACY = 5, TERMINAL_VICTORY = 6;
     public static final int MODE_CAMPAIGN = 0, MODE_RUN = 1, MODE_LOGISTICS = 2;
+    public static final int ROUTING_VERSION = 1, LOGISTICS_CONFIG_VERSION = 1;
     public static final int PERK_PRODUCTION = 1, PERK_KING_PRODUCTION = 2, PERK_SPEED = 4,
         PERK_KING_CAP = 8, PERK_START = 16, ALL_RUN_PERKS = 31;
     public static final int DEFENCE_NONE = 0, DEFENCE_HOME = 1, DEFENCE_PROVINCE = 2;
     public static final int CLASSIC = 0, PRESSURE = 1, GUARDIAN = 2;
     public static final int CAPTURE_EVENT = 1, INTERCEPT_EVENT = 2, KING_GAIN_EVENT = 3,
-        KING_LOSS_EVENT = 4, CAP_LOSS_EVENT = 5, HOME_KING_LOSS_EVENT = 6;
+        KING_LOSS_EVENT = 4, CAP_LOSS_EVENT = 5, HOME_KING_LOSS_EVENT = 6, ROUTE_INTERRUPTED_EVENT = 7;
     public static final int NEUTRAL = -1, PLAYER = 0;
     public static final int PLAYING = 0, WON = 1, LOST = 2;
     public static final int NORMAL_CAP = 100, MAX_TROOPS = 125, MAX_CONVOYS = 900, MAX_TEAMS = 6;
@@ -124,9 +125,10 @@ public final class GameModel {
         public int count() { return (int) Math.floor(troops + 0.00001); }
     }
 
-    public static final class Troop {
-        public final int source, target, owner;
-        public final float duration;
+    public static class Troop {
+        public int source, target;
+        public final int owner;
+        public float duration;
         public float age;
         public int units = 1;
         Troop(int source, int target, int owner, float duration, float age) {
@@ -134,6 +136,15 @@ public final class GameModel {
             this.duration = duration; this.age = age;
         }
         public float progress() { return Math.max(0, Math.min(1, age / duration)); }
+    }
+
+    public static final class RouteTroop extends Troop {
+        public final int[] route;
+        public int leg;
+        RouteTroop(int[] route, int owner, float duration, float age) {
+            super(route[0],route[1],owner,duration,age); this.route = route.clone();
+        }
+        public int destination() { return route[route.length-1]; }
     }
 
     public static final class Clash {
@@ -182,6 +193,7 @@ public final class GameModel {
     public String dailyDate = "";
     public int terminalReason, missionConfigVersion, missionPressure, battleMode, runPerks, runNode = -1;
     public String dailyVersion = "", runId = "";
+    public int logisticsId = -1, logisticsConfigVersion, routingVersion;
     private final float[] aiTimers = new float[MAX_TEAMS];
     public final boolean[] resigned = new boolean[MAX_TEAMS];
     private float dominanceSeconds;
@@ -347,7 +359,42 @@ public final class GameModel {
         if (outcome != PLAYING || sourceId < 0 || targetId < 0 || sourceId == targetId
             || sourceId >= territories.size() || targetId >= territories.size() || troops.size() >= MAX_CONVOYS) return 0;
         Territory source = territories.get(sourceId);
+        if (routed() && route(sourceId,targetId,source.owner) == null) return 0;
         return source.owner == NEUTRAL ? 0 : deploymentAmount(source.count(),fraction);
+    }
+
+    public void configureLogistics(int id) { configureLogistics(id,LOGISTICS_CONFIG_VERSION); }
+
+    public void configureLogistics(int id, int configVersion) {
+        if (elapsed != 0 || outcome != PLAYING || terminalReason != TERMINAL_NONE || objectiveType != CAMPAIGN
+            || battleMode != MODE_CAMPAIGN && battleMode != MODE_LOGISTICS || routingVersion != 0
+            || rulesVersion != RULES_VERSION || !historyKnown || !seedKnown || unitsSent != 0 || captures != 0
+            || unitsLost != 0 || intercepted != 0 || cappedReinforcements != 0 || startingKingLost || !troops.isEmpty()
+            || runPerks != 0 || !runId.isEmpty() || runNode != -1)
+            throw new IllegalStateException("Logistics requires a fresh battle");
+        for (boolean surrendered : resigned) if (surrendered) throw new IllegalStateException("Logistics requires a fresh battle");
+        if (id < 0 || id >= Logistics.PRESETS.length || configVersion != LOGISTICS_CONFIG_VERSION)
+            throw new IllegalArgumentException("Logistics configuration");
+        frozenLevel = snapshotLevel(); battleMode = MODE_LOGISTICS;
+        logisticsId = id; logisticsConfigVersion = configVersion; routingVersion = ROUTING_VERSION;
+    }
+
+    private boolean routed() { return battleMode == MODE_LOGISTICS && routingVersion == ROUTING_VERSION; }
+
+    public int[] route(int source, int target, int owner) {
+        if (source < 0 || target < 0 || source == target || source >= territories.size() || target >= territories.size()
+            || owner < PLAYER || owner > level().opponents || territories.get(source).owner != owner) return null;
+        return routed() ? LogisticsRoutes.getRoute(this,source,target,owner) : new int[] {source,target};
+    }
+
+    public float routeEta(int source, int target, int owner) { return routeEta(route(source,target,owner)); }
+
+    public float routeEta(int[] route) {
+        if (routed()) return LogisticsRoutes.eta(this,route);
+        if (route == null || route.length != 2 || route(route[0],route[1],
+            route[0] >= 0 && route[0] < territories.size() ? territories.get(route[0]).owner : NEUTRAL) == null)
+            return Float.POSITIVE_INFINITY;
+        return travelDuration(territories.get(route[0]),territories.get(route[1]),territories.get(route[0]).owner);
     }
 
     public void surrender() { if (outcome == PLAYING) finish(LOST,TERMINAL_SURRENDER); }
@@ -358,13 +405,15 @@ public final class GameModel {
         int amount = previewAmount(sourceId,targetId,fraction);
         if (amount == 0) return 0;
         Territory source = territories.get(sourceId), target = territories.get(targetId);
+        int[] path = routed() ? route(sourceId,targetId,source.owner) : null;
         int slots = MAX_CONVOYS - troops.size();
         source.troops -= amount;
-        float duration = travelDuration(source,target,source.owner);
+        float duration = travelDuration(source,path == null ? target : territories.get(path[1]),source.owner);
         // Large armies share visual packets without losing units to the particle budget.
         int packets = Math.min(amount,slots), remaining = amount;
         for (int i = 0; i < packets; i++) {
-            Troop troop = new Troop(sourceId,targetId,source.owner,duration,-i*.022f);
+            Troop troop = path == null ? new Troop(sourceId,targetId,source.owner,duration,-i*.022f)
+                : new RouteTroop(path,source.owner,duration,-i*.022f);
             troop.units = (remaining+packets-i-1)/(packets-i); remaining -= troop.units;
             troops.add(troop);
         }
@@ -394,14 +443,17 @@ public final class GameModel {
                 territory.troops = Math.min(capacity(territory),territory.troops+dt*productionRate(territory));
             }
         }
-        intercept(dt);
-        for (int i = troops.size() - 1; i >= 0; i--) {
-            Troop troop = troops.get(i);
-            if (troop.units == 0) { troops.remove(i); continue; }
-            troop.age += dt;
-            if (troop.age >= troop.duration) {
-                arrive(troop);
-                troops.remove(i);
+        if (routed()) advanceRoutedTroops(dt);
+        else {
+            intercept(dt);
+            for (int i = troops.size() - 1; i >= 0; i--) {
+                Troop troop = troops.get(i);
+                if (troop.units == 0) { troops.remove(i); continue; }
+                troop.age += dt;
+                if (troop.age >= troop.duration) {
+                    arrive(troop);
+                    troops.remove(i);
+                }
             }
         }
         if (lab == null) { checkResignation(dt); checkOutcome(); }
@@ -429,6 +481,35 @@ public final class GameModel {
                 transfer(target,troop.owner,troop.units-defenders,Math.min(.1f,Math.max(0,troop.age-troop.duration)));
                 capArrival(target,troop.units-defenders);
             }
+        }
+    }
+
+    private void advanceRoutedTroops(float dt) {
+        float remaining = dt;
+        // Split at arrivals so ownership changes and next-leg interceptions occur in time order.
+        while (remaining > 0 && !troops.isEmpty()) {
+            float step = remaining;
+            for (Troop troop : troops) if (troop.units > 0) step = Math.min(step,Math.max(0,troop.duration-troop.age));
+            if (step > 0) intercept(step);
+            for (int i = troops.size()-1; i >= 0; i--) {
+                Troop troop = troops.get(i);
+                if (troop.units == 0) { troops.remove(i); continue; }
+                troop.age += step;
+                if (troop.age < troop.duration-.000001f) continue;
+                if (troop instanceof RouteTroop) {
+                    RouteTroop packet = (RouteTroop)troop;
+                    boolean transit = packet.leg < packet.route.length-2;
+                    if (transit && territories.get(packet.target).owner == packet.owner) {
+                        packet.age = Math.max(0,packet.age-packet.duration);
+                        packet.leg++; packet.source = packet.route[packet.leg]; packet.target = packet.route[packet.leg+1];
+                        packet.duration = travelDuration(territories.get(packet.source),territories.get(packet.target),packet.owner);
+                        continue;
+                    }
+                    if (transit) event(ROUTE_INTERRUPTED_EVENT,packet.target,packet.units);
+                }
+                arrive(troop); troops.remove(i);
+            }
+            remaining = Math.max(0,remaining-step);
         }
     }
 
@@ -532,8 +613,9 @@ public final class GameModel {
     }
 
     public LabAi labAi(int[] styles, boolean allowResignation) {
-        if (objectiveType != CAMPAIGN || battleMode != MODE_CAMPAIGN || outcome != PLAYING)
-            throw new IllegalStateException("Lab requires Classic battle");
+        if (objectiveType != CAMPAIGN || outcome != PLAYING
+            || battleMode != MODE_CAMPAIGN && !(battleMode == MODE_LOGISTICS && routed()))
+            throw new IllegalStateException("Lab requires Classic or configured Logistics battle");
         if (styles == null || styles.length != level().opponents+1) throw new IllegalArgumentException("Lab seats");
         for (int style : styles) if (style < CLASSIC || style > GUARDIAN) throw new IllegalArgumentException("Lab style");
         return new LabAi(styles.clone(),allowResignation);
@@ -658,10 +740,12 @@ public final class GameModel {
             for (Territory target : territories) {
                 if (target.id == source.id) continue;
                 if (missionPressure > 0 && target.owner > PLAYER && target.owner != owner) continue;
+                int[] path = routed() ? route(source.id,target.id,owner) : null;
+                if (routed() && path == null) continue;
                 double score;
                 int amount;
-                float distance = distance(source, target);
-                float travel = travelDuration(source,target,owner);
+                float distance = path == null ? distance(source,target) : pathDistance(path);
+                float travel = path == null ? travelDuration(source,target,owner) : routeEta(path);
                 if (target.owner == owner) {
                     int threat = incoming(target.id,owner,false);
                     int shortage = threat-target.count()-incomingBefore(target.id,owner,true,firstArrival(target.id,owner,false));
@@ -694,7 +778,9 @@ public final class GameModel {
         reserve = Math.max(reserve,hostile-timely+3);
         for (Territory enemy : territories) {
             if (enemy.owner == NEUTRAL || enemy.owner == owner) continue;
-            double pressure = enemy.count()*(.22+difficulty*.09)/(1+distance(source,enemy)*.35);
+            int[] path = routed() ? route(enemy.id,source.id,enemy.owner) : null;
+            if (routed() && path == null) continue;
+            double pressure = enemy.count()*(.22+difficulty*.09)/(1+(path == null ? distance(source,enemy) : pathDistance(path))*.35);
             reserve = Math.max(reserve,(int)Math.ceil(pressure));
         }
         return reserve;
@@ -750,14 +836,17 @@ public final class GameModel {
             if (priorityOnly && missionPressure > 0 && target.id != originalKing(PLAYER)) continue;
             if (priorityOnly && (!target.capital || personality(owner) == GUARDIAN && target.originalOwner != owner
                 && !(missionPressure > 0 && target.id == originalKing(PLAYER)))) continue;
-            attackers.sort((a,b) -> Float.compare(distance(a,target),distance(b,target)));
+            attackers.sort((a,b) -> Float.compare(routed() ? routeEta(a.id,target.id,owner) : distance(a,target),
+                routed() ? routeEta(b.id,target.id,owner) : distance(b,target)));
             int capacity = 0, amount = 0;
             float travel = 0, totalDistance = 0;
             ArrayList<Territory> sources = new ArrayList<>();
             for (Territory source : attackers) {
+                int[] path = routed() ? route(source.id,target.id,owner) : null;
+                if (routed() && path == null) continue;
                 sources.add(source); capacity += available[source.id];
-                float distance = distance(source,target);
-                totalDistance += distance; travel = Math.max(travel,travelDuration(source,target,owner));
+                float distance = path == null ? distance(source,target) : pathDistance(path);
+                totalDistance += distance; travel = Math.max(travel,path == null ? travelDuration(source,target,owner) : routeEta(path));
                 amount = captureBudget(target,owner,travel);
                 if (amount <= 0 || capacity >= amount) break;
             }
@@ -782,22 +871,22 @@ public final class GameModel {
 
     private float lastArrival(int target, int owner, boolean friendly) {
         float latest = 0;
-        for (Troop troop : troops) if (troop.target == target && (troop.owner == owner) == friendly)
-            latest = Math.max(latest,troop.duration-troop.age);
+        for (Troop troop : troops) if (arrivalTarget(troop) == target && (troop.owner == owner) == friendly)
+            latest = Math.max(latest,arrivalEta(troop));
         return latest;
     }
 
     private float firstArrival(int target, int owner, boolean friendly) {
         float earliest = Float.MAX_VALUE;
-        for (Troop troop : troops) if (troop.target == target && (troop.owner == owner) == friendly)
-            earliest = Math.min(earliest,troop.duration-troop.age);
+        for (Troop troop : troops) if (arrivalTarget(troop) == target && (troop.owner == owner) == friendly)
+            earliest = Math.min(earliest,arrivalEta(troop));
         return earliest;
     }
 
     private int incomingBefore(int target, int owner, boolean friendly, float deadline) {
         int count = 0;
-        for (Troop troop : troops) if (troop.target == target && (troop.owner == owner) == friendly
-            && troop.duration-troop.age <= deadline+.0001f) count += troop.units;
+        for (Troop troop : troops) if (arrivalTarget(troop) == target && (troop.owner == owner) == friendly
+            && arrivalEta(troop) <= deadline+.0001f) count += troop.units;
         return count;
     }
 
@@ -809,7 +898,32 @@ public final class GameModel {
 
     private int incoming(int target, int owner, boolean friendly) {
         int result = 0;
-        for (Troop troop : troops) if (troop.target == target && (troop.owner == owner) == friendly) result += troop.units;
+        for (Troop troop : troops) if (arrivalTarget(troop) == target && (troop.owner == owner) == friendly) result += troop.units;
+        return result;
+    }
+
+    private float pathDistance(int[] path) {
+        float result = 0;
+        for (int i = 1; i < path.length; i++) result += distance(territories.get(path[i-1]),territories.get(path[i]));
+        return result;
+    }
+
+    private int arrivalTarget(Troop troop) {
+        if (!(troop instanceof RouteTroop)) return troop.target;
+        RouteTroop packet = (RouteTroop)troop;
+        for (int i = packet.leg+1; i < packet.route.length-1; i++)
+            if (territories.get(packet.route[i]).owner != packet.owner) return packet.route[i];
+        return packet.destination();
+    }
+
+    private float arrivalEta(Troop troop) {
+        float result = troop.duration-troop.age;
+        if (troop instanceof RouteTroop) {
+            RouteTroop packet = (RouteTroop)troop;
+            int target = arrivalTarget(troop);
+            for (int i = packet.leg+1; packet.route[i] != target; i++)
+                result += travelDuration(territories.get(packet.route[i]),territories.get(packet.route[i+1]),packet.owner);
+        }
         return result;
     }
 
@@ -844,9 +958,10 @@ public final class GameModel {
 
     public byte[] save() throws IOException {
         if (dailyDate == null || dailyVersion == null || runId == null) throw new IOException("Invalid battle identity");
+        validateRouting();
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(bytes);
-        out.writeInt(0x464C3035); out.writeInt(levelIndex); out.writeInt(difficulty);
+        out.writeInt(routed() ? 0x464C3036 : 0x464C3035); out.writeInt(levelIndex); out.writeInt(difficulty);
         out.writeFloat(elapsed); out.writeInt(outcome); out.writeInt(captures);
         out.writeInt(unitsLost); out.writeInt(unitsSent);
         writeLevel(out,level());
@@ -869,19 +984,28 @@ public final class GameModel {
         out.writeInt(outcome != PLAYING && terminalReason == TERMINAL_NONE ? TERMINAL_LEGACY : terminalReason);
         out.writeInt(missionConfigVersion); out.writeInt(missionPressure); out.writeUTF(dailyVersion);
         out.writeInt(battleMode); out.writeInt(runPerks); out.writeUTF(runId); out.writeInt(runNode);
+        if (routed()) {
+            out.writeInt(logisticsId); out.writeInt(logisticsConfigVersion); out.writeInt(routingVersion);
+            out.writeInt(troops.size());
+            for (Troop troop : troops) {
+                RouteTroop packet = (RouteTroop)troop;
+                writeInts(out,packet.route); out.writeInt(packet.leg);
+            }
+        }
         out.flush(); return bytes.toByteArray();
     }
 
     public static GameModel restore(byte[] bytes) throws IOException {
-        if (bytes == null || bytes.length > 50000) throw new IOException("Invalid save size");
+        if (bytes == null || bytes.length > 600000) throw new IOException("Invalid save size");
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));
         int version = in.readInt();
-        if (version < 0x464C3031 || version > 0x464C3035) throw new IOException("Unknown save version");
+        if (version < 0x464C3031 || version > 0x464C3036) throw new IOException("Unknown save version");
+        if (version < 0x464C3036 && bytes.length > 50000) throw new IOException("Invalid legacy save size");
         int level = in.readInt(), difficulty = in.readInt();
         if (level < 0 || level >= LEVELS.length || version < 0x464C3033 && level >= 30 || difficulty < 0 || difficulty > 2) throw new IOException("Invalid level");
         float elapsed = in.readFloat(); int outcome = in.readInt(), captures = in.readInt();
         int unitsLost = in.readInt(), unitsSent = in.readInt();
-        Level frozen = version == 0x464C3035 ? readLevel(in) : null;
+        Level frozen = version >= 0x464C3035 ? readLevel(in) : null;
         GameModel model = new GameModel(level,difficulty,100+level,LEGACY_RULES_VERSION,frozen);
         model.elapsed = elapsed; model.outcome = outcome; model.captures = captures;
         model.unitsLost = unitsLost; model.unitsSent = unitsSent;
@@ -893,8 +1017,8 @@ public final class GameModel {
             if (territory.owner < NEUTRAL || territory.owner > model.level().opponents
                 || !Double.isFinite(territory.troops) || territory.troops < 0
                 || territory.troops > (version == 0x464C3031 ? 99 : version == 0x464C3032 ? LEGACY_MAX_TROOPS
-                    : version == 0x464C3035 && territory.capital ? MAX_TROOPS+15 : troopCap(territory))) throw new IOException("Invalid territory");
-            if (version != 0x464C3035) territory.troops = Math.min(troopCap(territory),territory.troops);
+                    : version >= 0x464C3035 && territory.capital ? MAX_TROOPS+15 : troopCap(territory))) throw new IOException("Invalid territory");
+            if (version < 0x464C3035) territory.troops = Math.min(troopCap(territory),territory.troops);
         }
         int count = in.readInt();
         if (count < 0 || count > MAX_CONVOYS) throw new IOException("Invalid troop count");
@@ -930,7 +1054,7 @@ public final class GameModel {
             long state = in.readLong();
             if (state < 0 || state > StatefulRandom.MASK) throw new IOException("Invalid random state");
             model.random.restoreState(state);
-            if (version == 0x464C3035) {
+            if (version >= 0x464C3035) {
                 model.terminalReason = in.readInt(); model.missionConfigVersion = in.readInt();
                 model.missionPressure = in.readInt(); model.dailyVersion = in.readUTF();
                 model.battleMode = in.readInt(); model.runPerks = in.readInt(); model.runId = in.readUTF(); model.runNode = in.readInt();
@@ -947,7 +1071,21 @@ public final class GameModel {
             model.rulesVersion = 0; model.aiVersion = 0;
             model.terminalReason = model.legacyTerminalReason();
         }
+        if (version == 0x464C3036) {
+            model.logisticsId = in.readInt(); model.logisticsConfigVersion = in.readInt(); model.routingVersion = in.readInt();
+            if (in.readInt() != count) throw new IOException("Invalid route count");
+            for (int i = 0; i < count; i++) {
+                Troop direct = model.troops.get(i);
+                int[] path = readInts(in,model.territories.size()); int leg = in.readInt();
+                if (path.length < 2) throw new IOException("Invalid packet route");
+                RouteTroop packet = new RouteTroop(path,direct.owner,direct.duration,direct.age);
+                packet.source = direct.source; packet.target = direct.target; packet.units = direct.units; packet.leg = leg;
+                model.troops.set(i,packet);
+            }
+            if (!model.routed()) throw new IOException("Invalid routed save mode");
+        }
         model.validateExtension();
+        model.validateRouting();
         if (in.available() != 0) throw new IOException("Unexpected save data");
         return model;
     }
@@ -1019,6 +1157,38 @@ public final class GameModel {
             || battleMode == MODE_LOGISTICS && rulesVersion != RULES_VERSION)
             throw new IOException("Invalid battle mode");
         for (Territory territory : territories) if (territory.troops > capacity(territory)) throw new IOException("Invalid territory cap");
+    }
+
+    private void validateRouting() throws IOException {
+        if (routingVersion == 0) {
+            if (logisticsId != -1 || logisticsConfigVersion != 0) throw new IOException("Invalid routing metadata");
+            for (Troop troop : troops) if (troop instanceof RouteTroop) throw new IOException("Route in direct battle");
+            return;
+        }
+        if (!routed() || rulesVersion != RULES_VERSION || logisticsId < 0 || logisticsId >= Logistics.PRESETS.length
+            || logisticsConfigVersion != LOGISTICS_CONFIG_VERSION || frozenLevel == null || objectiveType != CAMPAIGN
+            || missionConfigVersion != 0 || missionPressure != 0 || !dailyDate.isEmpty() || !dailyVersion.isEmpty()
+            || runPerks != 0 || !runId.isEmpty() || runNode != -1)
+            throw new IOException("Invalid logistics configuration");
+        for (Troop troop : troops) {
+            if (!(troop instanceof RouteTroop)) throw new IOException("Direct packet in routed battle");
+            RouteTroop packet = (RouteTroop)troop;
+            if (packet.route.length < 2 || packet.route.length > territories.size() || packet.leg < 0 || packet.leg >= packet.route.length-1
+                || packet.owner < PLAYER || packet.owner > level().opponents || !Float.isFinite(packet.age)
+                || packet.age < -30 || packet.age >= packet.duration || packet.leg > 0 && packet.age < 0)
+                throw new IOException("Invalid route progress");
+            boolean[] visited = new boolean[territories.size()];
+            for (int i = 0; i < packet.route.length; i++) {
+                int tile = packet.route[i];
+                if (tile < 0 || tile >= territories.size() || visited[tile]
+                    || i > 0 && !LogisticsRoutes.adjacent(this,packet.route[i-1],tile)) throw new IOException("Invalid route geometry");
+                visited[tile] = true;
+            }
+            if (packet.source != packet.route[packet.leg] || packet.target != packet.route[packet.leg+1]
+                || Float.floatToIntBits(packet.duration) != Float.floatToIntBits(travelDuration(
+                    territories.get(packet.source),territories.get(packet.target),packet.owner)))
+                throw new IOException("Invalid route leg");
+        }
     }
 
     private static void writeLevel(DataOutputStream out, Level level) throws IOException {

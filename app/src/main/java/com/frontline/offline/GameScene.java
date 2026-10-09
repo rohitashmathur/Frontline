@@ -31,6 +31,7 @@ public final class GameScene {
         public Progress progress = new Progress();
         public PlaytestLog log = new PlaytestLog();
         public RunState run, lastRun;
+        public LogisticsRecords logisticsRecords = new LogisticsRecords();
         public int totalScore() {
             int sum = 0;
             for (int i = 0; i < best.length; i++) {
@@ -58,7 +59,7 @@ public final class GameScene {
     public static final int NONE = 0, PAUSE = 1, SECTORS = 2, SETTINGS = 3, RESULT = 4,
         SPLASH = 5, MENU = 6, TUTORIAL = 7, BRIEFING = 8, CONFIRM = 9,
         CHALLENGES = 10, DAILY = 11, MASTERY = 12, HELP = 13, CAMERA_HELP = 14,
-        RUN_HOME = 15, RUN_COUNCIL = 16, RUN_SUMMARY = 17;
+        RUN_HOME = 15, RUN_COUNCIL = 16, RUN_SUMMARY = 17, LOGISTICS = 18, LOGISTICS_RESULT = 19;
     public static final int BACKGROUND = 0xFF17191B, PANEL = 0xFF232629;
     public static final int WHITE = 0xFFF0F7F7, MUTED = 0xFFA2ABA9, BORDER = 0xFF41494A;
     public static final int[] COLORS = {0xFF5DE0BA, 0xFFFF816C, 0xFFF6D477, 0xFFAC9EEF, 0xFF65B9F2, 0xFFED99BF};
@@ -83,6 +84,8 @@ public final class GameScene {
     private long renderedCouncilNonce;
     private boolean improvedTime, improvedScore;
     private int feedbackType, feedbackUnits;
+    private int feedbackTile;
+    private float routeRefusalTimer;
     private float feedbackTimer;
     private float splashElapsed, kingBanner, resultDelay;
     private double tutorialFraction = .25;
@@ -167,6 +170,7 @@ public final class GameScene {
         }
         if (overlay != NONE) return;
         feedbackTimer = Math.max(0,feedbackTimer-Math.max(0,dt));
+        routeRefusalTimer = Math.max(0,routeRefusalTimer-Math.max(0,dt));
         kingBanner = Math.max(0,kingBanner-Math.max(0,dt));
         if (resultDelay > 0) {
             resultDelay = Math.max(0,resultDelay-Math.max(0,dt));
@@ -183,6 +187,7 @@ public final class GameScene {
             if (feedbackTimer == 0 || priority >= feedbackPriority(feedbackType)) {
                 feedbackUnits = event.type == feedbackType && feedbackTimer > 0 ? feedbackUnits+event.units : event.units;
                 feedbackType = event.type; feedbackTimer = 2.5f;
+                feedbackTile = event.tile;
             }
         }
         if (model.capturedKings(GameModel.PLAYER) != kings) kingBanner = 2.4f;
@@ -196,6 +201,12 @@ public final class GameScene {
                 }
                 log("attempt_result",model.outcome == GameModel.WON ? "won" : "lost");
                 openRun(); events.cue(model.outcome == GameModel.WON ? 2 : 3);
+                events.changed(); return;
+            }
+            if (model.battleMode == GameModel.MODE_LOGISTICS) {
+                improvedTime = profile.logisticsRecords.record(model,model.logisticsConfigVersion);
+                log("attempt_result",model.outcome == GameModel.WON ? "won" : "lost");
+                overlay = LOGISTICS_RESULT; events.cue(model.outcome == GameModel.WON ? 2 : 3);
                 events.changed(); return;
             }
             if (model.outcome == GameModel.WON) {
@@ -242,6 +253,9 @@ public final class GameScene {
         if (overlay == RUN_HOME || overlay == RUN_COUNCIL || overlay == RUN_SUMMARY) {
             drawRun(g); return;
         }
+        if (overlay == LOGISTICS || overlay == LOGISTICS_RESULT) {
+            drawLogistics(g); return;
+        }
         if (overlay == MENU || overlay == SETTINGS && previousOverlay == MENU) {
             drawMenu(g);
             if (overlay == MENU) return;
@@ -254,7 +268,9 @@ public final class GameScene {
         addIcon(g, "pause", "Pause", 274, 19, overlay == NONE);
         addIcon(g, "restart", "Restart Round", 322, 19, false);
         addIcon(g, "settings", "Settings", 370, 19, false);
-        g.text(String.format(java.util.Locale.US,"%02d / ",model.levelIndex+1)+model.level().name,22,82,17,WHITE,true,0);
+        String battleTitle = model.battleMode == GameModel.MODE_LOGISTICS
+            ? tr("logistics.map."+Logistics.getIndex(model)) : String.format(java.util.Locale.US,"%02d / ",model.levelIndex+1)+model.level().name;
+        g.text(battleTitle,22,82,17,WHITE,true,0);
         g.text(time(model.elapsed),397,82,17,WHITE,false,2);
         float x = 22;
         for (int owner = -1; owner <= model.level().opponents; owner++) {
@@ -274,6 +290,11 @@ public final class GameScene {
         boolean warning = selected >= 0 && model.objectiveType == Challenge.BUDGET
             && model.unitsSent+aimedAmount() > model.deploymentBudget;
         if (warning) g.text(tr("budget.warning_short",aimedAmount(),Math.max(0,model.deploymentBudget-model.unitsSent)),22,232,11,COLORS[1],true,0);
+        else if (model.battleMode == GameModel.MODE_LOGISTICS && selected >= 0 && territoryAt(pointerX,pointerY) >= 0 && territoryAt(pointerX,pointerY) != selected) {
+            int[] path = model.route(selected,territoryAt(pointerX,pointerY),0);
+            g.text(path == null ? tr("logistics.refused") : tr("logistics.route_preview",path.length-1,Math.round(model.routeEta(path)*10)/10.0),22,232,11,path == null ? COLORS[1] : WHITE,true,0);
+        }
+        else if (routeRefusalTimer > 0) g.text(tr("logistics.refused"),22,232,11,COLORS[1],true,0);
         else if (feedbackTimer > 0) g.text(feedbackText(),22,232,11,WHITE,false,0);
         layoutBoard();
         drawBoard(g);
@@ -346,6 +367,9 @@ public final class GameScene {
         g.clip(8,boardTop(),404,boardBottom()-boardTop());
         int aimed = selected < 0 ? -1 : territoryAt(pointerX, pointerY);
         int aimColor = model.objectiveType == Challenge.BUDGET && model.unitsSent+aimedAmount() > model.deploymentBudget ? COLORS[1] : WHITE;
+        boolean logistics = model.battleMode == GameModel.MODE_LOGISTICS;
+        int[] aimedRoute = logistics && selected >= 0 ? model.route(selected,aimed,0) : null;
+        if (logistics && aimed >= 0 && aimed != selected && aimedRoute == null) aimColor = COLORS[1];
         for (GameModel.Territory territory : model.territories) {
             float x = cx(territory), y = cy(territory), radius = boardScale * .94f;
             if (x+radius < 8 || x-radius > 412 || y+radius < boardTop() || y-radius > boardBottom()) continue;
@@ -365,6 +389,8 @@ public final class GameScene {
             float size = Math.min(20,boardScale*.45f)*Math.min(1,2.5f/count.length());
             if (x >= 20 && x <= 400) g.text(count,x,y+size*.3f,size,WHITE,true,1);
             if (territory.owner >= 0) factionMark(g,x,y+node+6,Math.min(5,boardScale*.13f),model.level().faction(territory.owner),color);
+            if (logistics && selected >= 0 && territory.id != selected && model.route(selected,territory.id,0) != null)
+                g.circle(x+radius*.5f,y-radius*.45f,3,COLORS[0]);
             if (territory.count() >= model.capacity(territory)) g.text("MAX",x,y-node+1,7,WHITE,true,1);
             if (territory.id == model.objectiveTarget && model.objectiveType == Challenge.HOLD_KING)
                 g.polygon(new float[] {x,y-radius,x+5,y-radius+6,x,y-radius+12,x-5,y-radius+6},COLORS[2],WHITE,1);
@@ -401,7 +427,12 @@ public final class GameScene {
         }
         if (selected >= 0) {
             GameModel.Territory source = model.territories.get(selected);
-            g.line(cx(source), cy(source), pointerX, pointerY, 2, aimColor);
+            if (aimedRoute != null) {
+                for (int i = 1; i < aimedRoute.length; i++) {
+                    GameModel.Territory a = model.territories.get(aimedRoute[i-1]), b = model.territories.get(aimedRoute[i]);
+                    g.line(cx(a),cy(a),cx(b),cy(b),2.5f,aimColor);
+                }
+            } else g.line(cx(source), cy(source), pointerX, pointerY, 2, aimColor);
             float angle = (float) Math.atan2(pointerY-cy(source), pointerX-cx(source));
             float dx = (float) Math.cos(angle), dy = (float) Math.sin(angle);
             g.polygon(new float[] {pointerX,pointerY,pointerX-dx*12-dy*6,pointerY-dy*12+dx*6,
@@ -432,6 +463,7 @@ public final class GameScene {
             boolean over = model.objectiveType == Challenge.BUDGET && model.unitsSent+sent > model.deploymentBudget;
             g.text(tr("deploy.preview",sent,source.count()-sent),22,height-22,11,over ? COLORS[1] : WHITE,true,0);
         } else if (model.battleMode == GameModel.MODE_RUN) g.text(tr("run.retries",profile.run == null ? 0 : profile.run.retriesRemaining()),22,height-22,11,MUTED,false,0);
+        else if (model.battleMode == GameModel.MODE_LOGISTICS) g.text(tr("logistics.experimental"),22,height-22,11,COLORS[2],false,0);
         else if (model.objectiveType == 0) g.text("3 STARS  "+time(model.level().parSeconds),22,height-22,11,MUTED,false,0);
         cameraButton(g,"zoom_out","Zoom Out",254,height-48);
         cameraButton(g,"fit_board","Fit Battlefield",304,height-48);
@@ -495,7 +527,8 @@ public final class GameScene {
         button(g,"mastery","Mastery",216,row+108,182,44,false,true);
         button(g,"tutorial","How to Play",22,row+160,182,44,false,true);
         button(g,"help","Rules",216,row+160,182,44,false,true);
-        button(g,"run",tr("run.title"),22,row+212,376,44,false,true);
+        button(g,"run",tr("run.title"),22,row+212,182,44,false,true);
+        button(g,"logistics",tr("logistics.title"),216,row+212,182,44,false,true);
         int cleared = 0;
         for (int i = 0; i < profile.best.length; i++) if (profile.cleared(i)) cleared++;
         g.text(cleared + " / "+GameModel.LEVELS.length+" CLEARED", 52, height-40, 11, MUTED, true, 0);
@@ -876,15 +909,32 @@ public final class GameScene {
         });
         if (unavailable) paragraph(g,tr("run.recovery"),22,height-190,376,12,COLORS[1],true,0);
     }
+    private void drawLogistics(final Graphics g) {
+        LogisticsScreens.Controls controls = (id,label,x,y,w,h,primary) -> {
+            if (id.startsWith("logistics_map_")) {
+                buttons.add(new Button(id,tr("logistics.map."+id.substring(14)),x,y,w,h));
+                g.rect(x,y,w,h,4,COLORS[0]);
+                float cx = x+w/2, cy = y+h/2;
+                g.line(cx-8,cy,cx+8,cy,2,BACKGROUND);
+                g.line(cx+2,cy-6,cx+8,cy,2,BACKGROUND);
+                g.line(cx+2,cy+6,cx+8,cy,2,BACKGROUND);
+            } else button(g,id,label,x,y,w,h,primary,true);
+        };
+        if (overlay == LOGISTICS_RESULT) LogisticsScreens.drawResult(g,height,profile.language,model,profile.logisticsRecords,controls);
+        else LogisticsScreens.drawHome(g,height,profile.language,profile.difficulty,profile.logisticsRecords,
+            activeBattle() && model.battleMode == GameModel.MODE_LOGISTICS,controls);
+    }
     private String attemptName() {
         if (unfinishedRun()) return tr("run.progress",profile.run.battlesCleared(),5);
+        if (model.battleMode == GameModel.MODE_LOGISTICS) return tr("logistics.map."+Logistics.getIndex(model));
         return model.dailyDate.isEmpty() ? model.objectiveType == 0 ? "Sector "+(model.levelIndex+1) : "Challenge / Sector "+(model.levelIndex+1) : "Daily "+model.dailyDate;
     }
     private void log(String event,String detail) { profile.log.add(events.now(),event,hasBattle ? model : null,detail); }
     private static int feedbackPriority(int type) {
-        return type == GameModel.HOME_KING_LOSS_EVENT ? 6 : type == GameModel.KING_GAIN_EVENT || type == GameModel.KING_LOSS_EVENT ? 5 : type == GameModel.CAP_LOSS_EVENT ? 4 : type == GameModel.INTERCEPT_EVENT ? 3 : 1;
+        return type == GameModel.HOME_KING_LOSS_EVENT ? 6 : type == GameModel.KING_GAIN_EVENT || type == GameModel.KING_LOSS_EVENT ? 5 : type == GameModel.ROUTE_INTERRUPTED_EVENT || type == GameModel.CAP_LOSS_EVENT ? 4 : type == GameModel.INTERCEPT_EVENT ? 3 : 1;
     }
     private String feedbackText() {
+        if (feedbackType == GameModel.ROUTE_INTERRUPTED_EVENT) return tr("logistics.route_stopped",feedbackTile+1);
         if (feedbackType == GameModel.HOME_KING_LOSS_EVENT) return "Starting king lost / enemy-king bonus unaffected.";
         if (feedbackType == GameModel.KING_GAIN_EVENT) return "Enemy king secured / team growth updated.";
         if (feedbackType == GameModel.KING_LOSS_EVENT) return "Held enemy king lost / team growth reduced.";
@@ -893,6 +943,7 @@ public final class GameScene {
         return "Capture complete / "+feedbackUnits+" troops survived.";
     }
     private String objectiveLabel() {
+        if (model.battleMode == GameModel.MODE_LOGISTICS) return tr("logistics.experimental")+" / "+tr("logistics.title");
         if (model.objectiveType == Challenge.HOLD_KING) return "HOLD MARKED KING  "+time(model.objectiveProgress)+" / "+time(model.objectiveSeconds);
         if (model.objectiveType == Challenge.KEEP_KING) return "KEEP STARTING KING  "+time(model.elapsed)+" / "+time(model.objectiveSeconds);
         if (model.objectiveType == Challenge.BUDGET) return tr("budget.hud",model.unitsSent,model.deploymentBudget,Math.max(0,model.deploymentBudget-model.unitsSent));
@@ -993,6 +1044,14 @@ public final class GameScene {
     }
     private void drawHelp(Graphics g) {
         g.text("Field Manual",22,55,27,WHITE,true,0);
+        if (helpReturn == LOGISTICS || helpReturn == LOGISTICS_RESULT
+            || helpReturn == PAUSE && model.battleMode == GameModel.MODE_LOGISTICS) {
+            String[] routedRules = {tr("logistics.rules"),tr("logistics.reinforce_rule"),tr("logistics.attack_rule"),
+                tr("logistics.transit_rule"),tr("logistics.no_attrition"),"Hostile armies meeting in flight cancel one-for-one.",
+                "Reinforcements beyond 100 / 125 are discarded.",tr("logistics.separate_records")};
+            for (int i = 0; i < routedRules.length; i++) paragraph(g,routedRules[i],22,108+i*48,376,11,i%2 == 0 ? WHITE : MUTED,false,0);
+            button(g,"help_back","Back",52,height-69,316,44,false,true); return;
+        }
         String[] lines = {"Any tile can be targeted. Gaps do not block travel.","Reinforcements beyond 100 / 125 are discarded.","Enemy kings held: 1 x1.2 / 2 x1.44 / 3 x1.728.","Four enemy kings: x3. Each additional king: x1.2.","Your original king never counts toward that boost.","Hostile armies meeting in flight cancel one-for-one.","Surrender: >90% control for ten active seconds,", "and rivals cannot recapture any exposed tile.","3 stars: at/below par. 2 stars: at/below 1.6x par.","Score: 1000 + 50 per capture + time bonus", "(up to 1200, minus 6 per second) + 250 per difficulty.","Legacy records have unknown historical difficulty."};
         for (int i = 0; i < lines.length; i++) paragraph(g,lines[i],22,108+i*33,376,11,i%2 == 0 ? WHITE : MUTED,false,0);
         button(g,"help_back","Back",52,height-69,316,44,false,true);
@@ -1032,8 +1091,10 @@ public final class GameScene {
             }
         } else if (selected >= 0 && overlay == NONE) {
             int target = territoryAt(x,y);
-            if (target >= 0 && model.territories.get(selected).owner == GameModel.PLAYER
-                && model.launch(selected,target,fraction) > 0) events.cue(0);
+            if (target >= 0 && model.territories.get(selected).owner == GameModel.PLAYER) {
+                if (model.battleMode == GameModel.MODE_LOGISTICS && target != selected && model.route(selected,target,0) == null) routeRefusalTimer = 2.5f;
+                if (model.launch(selected,target,fraction) > 0) events.cue(0);
+            }
         }
         selected = -1; practiceDragging = false; panning = false;
     }
@@ -1050,7 +1111,7 @@ public final class GameScene {
         else if (overlay == HELP) overlay = helpReturn;
         else if (overlay == BRIEFING) overlay = previewMode == 0 ? MENU : previewMode == 1 ? CHALLENGES : DAILY;
         else if (overlay == CHALLENGES || overlay == DAILY || overlay == MASTERY
-            || overlay == RUN_HOME || overlay == RUN_COUNCIL || overlay == RUN_SUMMARY) overlay = MENU;
+            || overlay == RUN_HOME || overlay == RUN_COUNCIL || overlay == RUN_SUMMARY || overlay == LOGISTICS || overlay == LOGISTICS_RESULT) overlay = MENU;
         else if (overlay == CAMERA_HELP) overlay = PAUSE;
         else if (overlay == SPLASH || overlay == RESULT) overlay = MENU;
         else if (overlay == TUTORIAL) {
@@ -1069,6 +1130,13 @@ public final class GameScene {
         else if (id.equals("resume")) { overlay = NONE; log("resume",""); }
         else if (id.equals("menu") || id.equals("home")) { cancel(); overlay = MENU; }
         else if (id.equals("run")) openRun();
+        else if (id.equals("logistics")) overlay = LOGISTICS;
+        else if (id.startsWith("logistics_map_")) {
+            int map = Integer.parseInt(id.substring(14));
+            requestReplacement(() -> installAttempt(Logistics.create(map,profile.difficulty,System.nanoTime())),"new_logistics");
+        }
+        else if (id.equals("continue_logistics") && activeBattle() && model.battleMode == GameModel.MODE_LOGISTICS) overlay = NONE;
+        else if (id.equals("logistics_retry")) requestReplacement(this::restartAttempt,"restart");
         else if (id.equals("new_run")) requestReplacement(() -> {
             profile.run = RunState.newRun(System.nanoTime()); hasBattle = false; openRun();
         },"new_run");
@@ -1195,6 +1263,7 @@ public final class GameScene {
         model = next; model.aiVersion = 1; hasBattle = true;
         resultRecorded = false; improvedTime = improvedScore = false;
         kingBanner = resultDelay = feedbackTimer = 0; feedbackType = feedbackUnits = 0;
+        routeRefusalTimer = 0;
         zoom = 1; panX = panY = 0; overlay = NONE; cancel(); log("attempt_start","");
     }
 
@@ -1232,7 +1301,8 @@ public final class GameScene {
         int difficulty = old.dailyDate.isEmpty() ? profile.difficulty : old.difficulty;
         long seed = old.dailyDate.isEmpty() ? System.nanoTime() : old.seed;
         GameModel next;
-        if (old.objectiveType != 0) {
+        if (old.battleMode == GameModel.MODE_LOGISTICS) next = Logistics.create(Logistics.getIndex(old),difficulty,seed);
+        else if (old.objectiveType != 0) {
             Challenge definition = new Challenge("Saved Mission",old.levelIndex,old.objectiveType,old.objectiveSeconds,old.deploymentBudget);
             next = definition.createVersioned(difficulty,seed,old.challengeId,old.dailyDate,
                 old.missionConfigVersion == Challenge.LEGACY_CONFIG_VERSION ? Challenge.LEGACY_CONFIG_VERSION : Challenge.CONFIG_VERSION);

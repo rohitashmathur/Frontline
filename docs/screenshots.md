@@ -1,5 +1,17 @@
 # Native Screenshots
 
+## V11
+
+Actual Android 15 Canvas fixtures in English, Indonesian and Hindi, verified at small-phone, tall-phone and tablet sizes. Outcomes and connected ownership are staged acceptance fixtures, not human gameplay or organically won battles. The V10/V6 galleries below are historical.
+
+<img src="screenshots/v11/menu-final-id.png" width="240" alt="V11 integrated Indonesian main menu fixture" /> <img src="screenshots/v11/budget-warning-en.png" width="240" alt="V11 English deployment warning fixture" /> <img src="screenshots/v11/tutorial-hi.png" width="240" alt="V11 Hindi tutorial fixture" />
+
+<img src="screenshots/v11/run-council.png" width="240" alt="V11 Classic Run perk council fixture" /> <img src="screenshots/v11/run-summary.png" width="240" alt="V11 staged completed Run summary" />
+
+<img src="screenshots/v11/logistics-selector-hi.png" width="240" alt="Experimental routed maps in Hindi" /> <img src="screenshots/v11/logistics-route-en.png" width="240" alt="Native multi-hop route and ETA preview" /> <img src="screenshots/v11/logistics-result-id.png" width="240" alt="Separate Logistics result in Indonesian" />
+
+Evidence and repeatable commands: [Phase 1](verification-v11-phase1.md), [Run](verification-v11-phase3.md), [Logistics](verification-v11-phase4.md). Fluent-speaker review and physical-phone/human playtesting are pending.
+
 ## V10
 
 These are actual Android 15 Canvas captures from the final V10 native harness, not mockups. Small phone: 480x800; tall phone: 720x1600; tablet: 1200x1920. The fixture disables audio, enables opt-in logs and uses the V7 review code. The result fixture shortens the retain-king timer to 0.2 seconds only for repeatable UI verification; it is not evidence of ordinary mission completion time. Dense-map selection fixtures set 125/100 caps to verify MAX and readable selected counts.

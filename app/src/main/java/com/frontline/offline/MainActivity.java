@@ -151,6 +151,13 @@ public final class MainActivity extends Activity {
                 String data = storage.getString("last-run-v11",null);
                 if (data != null) profile.lastRun = RunState.restore(Base64.decode(data,Base64.DEFAULT));
             } catch (Exception invalidRun) { storage.edit().remove("last-run-v11").commit(); }
+            try {
+                String data = storage.getString("logistics-records-v11",null);
+                if (data != null) profile.logisticsRecords = LogisticsRecords.restore(Base64.decode(data,Base64.DEFAULT));
+            } catch (Exception invalidLogistics) {
+                Object data = storage.getAll().get("logistics-records-v11");
+                storage.edit().putString("logistics-records-invalid-v11",String.valueOf(data)).remove("logistics-records-v11").commit();
+            }
             for (int i = 0; i < profile.best.length; i++) {
                 profile.best[i] = Math.max(0,storage.getInt("best-"+i,0));
                 profile.stars[i] = Math.max(0,Math.min(3,storage.getInt("stars-"+i,0)));
@@ -162,6 +169,7 @@ public final class MainActivity extends Activity {
                 if (saved != null) restored = GameModel.restore(Base64.decode(saved,Base64.DEFAULT));
             } catch (Exception invalidSave) { storage.edit().remove("battle").apply(); }
             scene = new GameScene(profile,restored,this);
+            setContentDescription(Localization.translate(profile.language,"Frontline battlefield"));
             ToneGenerator generator;
             try { generator = new ToneGenerator(AudioManager.STREAM_MUSIC,35); }
             catch (RuntimeException unavailable) { generator = null; }
@@ -233,7 +241,12 @@ public final class MainActivity extends Activity {
         }
 
         @Override public boolean performClick() { super.performClick(); return true; }
-        @Override public void changed() { music.setEnabled(scene.profile.music); save(); }
+        @Override public void changed() {
+            music.setEnabled(scene.profile.music);
+            setContentDescription(translate("Frontline battlefield"));
+            sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
+            save();
+        }
         @Override public void exportPlaytestRequested() {
             MainActivity activity = (MainActivity)getContext();
             activity.pendingCsv = scene.profile.log.exportCsv();
@@ -326,6 +339,7 @@ public final class MainActivity extends Activity {
                 else edit.remove("run-v11");
                 if (profile.lastRun != null) edit.putString("last-run-v11",Base64.encodeToString(profile.lastRun.save(),Base64.NO_WRAP));
                 else edit.remove("last-run-v11");
+                edit.putString("logistics-records-v11",Base64.encodeToString(profile.logisticsRecords.save(),Base64.NO_WRAP));
                 if (scene.hasBattle) edit.putString("battle",Base64.encodeToString(scene.model.save(),Base64.NO_WRAP));
                 else edit.remove("battle");
             }

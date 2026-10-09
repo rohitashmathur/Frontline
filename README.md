@@ -1,6 +1,6 @@
 # Frontline
 
-An original offline Android territory-conquest game. **V11 / 0.11.0** has 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, difficulty-specific records, mastery rewards, music, practical tutorials and saved battles. English, Bahasa Indonesia and Hindi are bundled offline. No login, backend, network permission, ads or remote telemetry.
+An original offline Android territory-conquest game. **V11 / 0.11.0** has 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, five-battle Classic runs and three experimental routed maps. It includes difficulty-specific records, mastery rewards, music, practical tutorials and saved battles. English, Bahasa Indonesia and Hindi are bundled offline. No login, backend, network permission, ads or remote telemetry.
 
 ## Install
 
@@ -14,11 +14,12 @@ Install over V7, V6 or V5 to retain local progress; do not uninstall first. The 
 - Settings is a generously sized, accessible gear in the top-right safe area. Daily Mission sits immediately below it, with a separate touch target and completion state.
 - Settings switches English, Bahasa Indonesia and Hindi immediately without changing a battle, difficulty, Daily seed or progress. The choice persists. Existing installations default to English; new installations use a supported device language.
 - Tutorial Skip and Complete are mutually exclusive and protected against duplicate input. Corrected terminal-event semantics start with V11; historical logs are retained unchanged.
-- Missions and Daily use objective-specific completion and records: elapsed completion time for Hold King, completion-only for Home Guard, and fewest troops deployed for Troop Budget, with time only breaking budget ties. Revised missions award no campaign speed stars. V10 records remain historical.
+- Missions and Daily use objective-specific completion and records: elapsed completion time for Hold King, completion-only for Keep King, and fewest troops deployed for Troop Budget, with time only breaking budget ties. Revised missions award no campaign speed stars. V10 records remain historical.
 - The model stores a defeat reason. Budget missions show used/remaining troops and warn before an excessive deployment; friendly reinforcement counts toward the allowance. Over-budget actions still lose rather than being silently cancelled.
 - Mission configurations, Daily generation and record evaluation are versioned. Continuing an older battle keeps its configuration, timers, difficulty and date.
 - Classic Run Mode has five curated battles, four councils, five exact non-stacking perks and one same-seed retry. Its frozen save, factual results and perks are isolated from campaign/mastery. Restarting a run battle counts as defeat.
 - The small [Balance Lab](tools/BALANCE_LAB.md) records matched seeds, actual-model controller/seat comparisons, durations and unresolved timeouts. The [human playtest checklist](docs/playtest-v11.md) remains pending execution.
+- Experimental Logistics has three separate routed maps, friendly paths around gaps, legal-target/path/ETA previews, transit combat and isolated records. Classic campaign and Run targeting are unchanged; no distance attrition is added.
 
 See [V11 Rules](docs/game-rules-v11.md) and the versioned verification reports for precise scope and remaining human-playtest work.
 
@@ -57,11 +58,14 @@ Settings now includes **Enter Code**. Enter exactly `12345` and select Unlock (o
 - [Current V11 Rules](docs/game-rules-v11.md)
 - [V11 Phase 1 Verification](docs/verification-v11-phase1.md)
 - [V11 Balance Lab Verification](docs/verification-v11-phase2.md)
+- [V11 Run Mode Verification](docs/verification-v11-phase3.md)
+- [V11 Logistics Verification](docs/verification-v11-phase4.md)
+- [V11 Delivery Report](docs/verification-v11.md)
 - [V10 Game Logic and Preserved Balance Rules](docs/game-rules-v10.md)
 - [V10 Acceptance and Verification](docs/verification-v10.md)
 - [Native Android Screenshots](docs/screenshots.md)
 
-<img src="docs/screenshots/v10-menu.png" width="240" alt="V10 main menu protects unfinished battles" /> <img src="docs/screenshots/v10-challenges.png" width="240" alt="V10 objective mission selection" />
+<img src="docs/screenshots/v11/menu-final-id.png" width="240" alt="V11 integrated localized menu fixture" /> <img src="docs/screenshots/v11/logistics-route-en.png" width="240" alt="V11 experimental route preview fixture" />
 
 ## Play
 
@@ -77,7 +81,7 @@ Use the main menu to continue, select a sector, start a new attempt, choose a mi
 | --- | --- |
 | `app/` and root Gradle files | Native Android app, campaign, portable battle rules and assets |
 | `scripts/` | Windows setup, build and Android/portable verification |
-| `tests/` | Core, V5-V7 regression and V10 feature tests |
+| `tests/` | Core, legacy regression and V10/V11 feature tests |
 | `android-tests/` | Separate test-only native flow and multi-touch instrumentation |
 | `tools/` | Rendering adapters, deterministic test saves and original music generation |
 | `docs/` | Architecture, diagrams, versioned rules, acceptance and native screenshots |
@@ -113,6 +117,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-test-device.
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-unlock-code.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-gestures.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v10.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v11.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v11-run.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v11-logistics.ps1 -RunDevice
 ```
 
 The current native scripts use Android 15 and only the named `emulator-5580`; test fixtures never target a physical phone. Put the actual previous `FrontlineV6.apk` in `build/` for the upgrade check. The separate test-only instrumentation APK verifies real Android touch/lifecycle flows and captures Canvas pixels at three phone/tablet sizes, then is removed. Captures go to `build/device/`; fixtures/tools are not packaged in the game APK. `device-smoke-test.ps1` is the historical V6 flow script, not the V10 acceptance runner. Stop the emulator after use.
@@ -125,7 +132,7 @@ See [V7 Verification Results](docs/verification-v7.md) for the local APK checksu
 
 - AI uses heuristics. Pressure and Guardian have different targeting/reserve behaviour, but no faction-specific production bonuses.
 - Later-map balance and resignation feel still need human playtesting.
-- Troops fly directly between any two territories without terrain obstruction.
+- Classic campaign and Run troops fly directly without terrain obstruction. Experimental Logistics alone uses friendly connected routes.
 - Menu controls expose localized accessibility labels. Full nonvisual battlefield play still needs accessibility testing.
 - Difficulty is fixed per attempt; Settings selects the next attempt's difficulty. Records are local, not competitive rankings.
 - Headless tests verify music playback state, not perceived loudness or manufacturer-specific audio/touch behavior.

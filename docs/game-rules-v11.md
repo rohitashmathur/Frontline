@@ -45,6 +45,16 @@ Run state is an independent checksummed snapshot with frozen maps, rule/perk ver
 
 The proposed 10-15 minute run length and perk balance remain hypotheses for human testing.
 
+## Experimental Logistics
+
+Three purpose-built maps, Twin Causeways, Broken Junction and Crown Circuit, use routing version 1. Hex neighbors are actual adjacent map tiles; removed cells have no graph vertex. Friendly reinforcement follows connected friendly tiles. Attacks use friendly interiors and one final adjacent hop to an enemy or neutral target. Equal-length routes use stable ID-ordered BFS. Illegal releases spend no troops.
+
+The battlefield marks reachable targets and draws the selected route with a travel estimate. ETA is first-packet travel, including the existing per-hop launch/travel overhead but excluding the stagger between packets. There is no distance attrition. On arrival at a transit tile that is no longer friendly, that packet fights using ordinary combat and stops there, even if it captures the tile. Later packets independently check ownership when they arrive. Friendly transit does not reinforce or clip at the intermediate cap; final arrival does.
+
+AI uses the same legal paths, final destinations and remaining routed arrival estimates. Hostile flight interception and the 900-packet limit preserve all units/accounting. Simultaneous arrivals have deterministic packet order. FL06 freezes topology, path, leg, ages, mode/map/configuration and RNG for mid-route restore; campaign and Run still use direct FL05 saves.
+
+Wins create only separate logistics completion/best-elapsed records under exact map/difficulty/rules/configuration keys. They grant no campaign score, stars, unlocks, wins-counter increments or mastery. Settings language is presentation-only, and switching away protects the single live battle slot. The mode remains experimental pending human comprehension, duration and enjoyment comparisons.
+
 ## Validation Limits
 
 Automated seed simulations measure determinism and defined success/failure gates, not human difficulty, enjoyment or linguistic quality. Fluent-speaker review, physical-device behaviour and human sessions remain separate evidence requirements. See the V11 verification reports for actual executed checks.

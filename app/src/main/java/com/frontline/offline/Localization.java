@@ -581,6 +581,7 @@ public final class Localization {
         add("logistics.refusal.no_troops", "No troops available to send.", "Tidak ada pasukan untuk dikirim.", "भेजने के लिए सैनिक नहीं।");
         add("logistics.refusal.convoy_limit", "Too many convoys in flight. Try again shortly.", "Terlalu banyak konvoi berjalan. Coba sebentar lagi.", "बहुत से काफ़िले रास्ते में हैं। थोड़ी देर में कोशिश करें।");
         add("logistics.route_interrupted", "Route interrupted at tile {tile}; combat resolved there.", "Rute terputus di petak {tile}; pertempuran terjadi di sana.", "क्षेत्र {tile} पर रास्ता टूटा; वहीं लड़ाई हुई।");
+        add("logistics.route_stopped", "Route stopped at tile {tile}.", "Rute berhenti di petak {tile}.", "रास्ता क्षेत्र {tile} पर रुका।");
         add("logistics.transit_rule", "If a transit tile changes owner, the convoy fights and stops there.", "Jika petak transit berganti pemilik, konvoi bertempur dan berhenti di sana.", "रास्ते के क्षेत्र का मालिक बदलने पर काफ़िला वहीं लड़ता और रुकता है।");
         add("logistics.no_attrition", "No distance attrition.", "Tidak ada kehilangan karena jarak.", "दूरी से सैनिक नहीं घटते।");
         add("logistics.separate_records", "Experimental records are separate from Classic.", "Rekor eksperimen terpisah dari Klasik.", "प्रयोगात्मक रिकॉर्ड क्लासिक से अलग हैं।");

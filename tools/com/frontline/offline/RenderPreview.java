@@ -152,6 +152,26 @@ public final class RenderPreview implements GameScene.Graphics {
                 render(runScene,420,900,new File(output,"v11-"+language+"-run-result-tall-"+node+".png"));
                 if (node < 4) localized.run = localized.run.choosePerk(localized.run.councilNonce,localized.run.councilOffer()[0]);
             }
+            localized.run = null;
+            for (int map = 0; map < Logistics.PRESETS.length; map++) {
+                GameModel routed = Logistics.create(map,1,803);
+                GameScene logisticsScene = new GameScene(localized,routed,events);
+                logisticsScene.overlay = GameScene.LOGISTICS;
+                render(logisticsScene,360,532,new File(output,"v11-"+language+"-logistics-home-"+map+".png"));
+                logisticsScene.overlay = GameScene.NONE;
+                render(logisticsScene,360,532,new File(output,"v11-"+language+"-logistics-map-"+map+".png"));
+                int source = routed.originalKing(0);
+                int target = LogisticsRoutes.legalTargets(routed,source,0)[0];
+                float[] a = logisticsScene.position(source), b = logisticsScene.position(target);
+                logisticsScene.down(a[0],a[1]); logisticsScene.move(b[0],b[1]);
+                render(logisticsScene,360,532,new File(output,"v11-"+language+"-logistics-route-"+map+".png"));
+                logisticsScene.cancel(); routed.outcome = GameModel.WON;
+                routed.terminalReason = GameModel.TERMINAL_VICTORY; routed.elapsed = 64;
+                logisticsScene.update(0);
+                render(logisticsScene,360,532,new File(output,"v11-"+language+"-logistics-win-"+map+".png"));
+                routed.outcome = GameModel.LOST; routed.terminalReason = GameModel.TERMINAL_ELIMINATED;
+                render(logisticsScene,420,900,new File(output,"v11-"+language+"-logistics-defeat-"+map+".png"));
+            }
         }
         System.out.println("Rendered all 60 maps, ten chapter pages/endings, five tutorial steps, and zoom/pan states at compact and tall sizes.");
     }

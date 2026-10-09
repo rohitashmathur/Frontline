@@ -17,6 +17,9 @@ flowchart LR
     Objective[ObjectiveResult / reason codes and record policy]
     Locale[Localization / English, Indonesian and Hindi]
     Run[RunState / frozen nodes, council and retry snapshots]
+    Routes[LogisticsRoutes / deterministic hex BFS]
+    Logistics[Logistics / three experimental frozen maps]
+    RoutedRecords[LogisticsRecords / separate exact records]
     Log[PlaytestLog / bounded opt-in snapshots]
     Export[Android document picker / manual CSV]
     Storage[(SharedPreferences: frontline-v1)]
@@ -34,6 +37,10 @@ flowchart LR
     Profile --> Log
     Profile --> Run
     Run --> Model
+    Profile --> RoutedRecords
+    Scene --> Logistics
+    Logistics --> Model
+    Model --> Routes
     Scene --> Challenges
     Scene --> Objective
     Scene --> Locale
@@ -61,6 +68,7 @@ flowchart LR
 | Objective result | Shared completion policy and persisted reason/argument interpretation; no mission speed stars | `ObjectiveResult.java` |
 | Localization | Offline stable keys and formatted sentences, shared by Android and portable tests | `Localization.java` |
 | Classic runs | Five frozen nodes, versioned perks, battle associations, idempotent councils/retry and factual summary | `RunState.java`, `RunScreens.java` |
+| Experimental routing | Three hole-aware maps, friendly-interior paths, route ETA, transit combat and independent records | `Logistics.java`, `LogisticsRoutes.java`, `LogisticsRecords.java`, `LogisticsScreens.java` |
 | Campaign | Ten story chapters, six named factions, rulers and short HUD names | `Campaign.java` |
 | Audio | Default-on looping music, independent enable flag, lifecycle pause/resume, Android audio focus | `BackgroundMusic.java` |
 | Test adapters | Java2D rendering, rule tests, Android fixture generation and preference probes | `tests/`, `tools/`, `scripts/` |
@@ -87,6 +95,14 @@ flowchart TD
     Retry --> RunHome
     RunResult -->|Fifth win / second loss| Summary[Factual run summary; no campaign rewards]
     Summary --> Menu
+    Menu --> LogisticsHome[Experimental Logistics / map and difficulty]
+    LogisticsHome --> LogisticsBattle[Protected replacement / routed battle]
+    LogisticsBattle --> Routes[Preview legal paths and ETA / route-aware AI]
+    Routes --> Transit{Transit tile still friendly on arrival?}
+    Transit -->|Yes| NextHop[Continue next leg without attrition]
+    Transit -->|No| Fight[Combat there and stop this packet]
+    LogisticsBattle --> LogisticsResult[Separate factual result / logistics records only]
+    LogisticsResult --> LogisticsHome
     Settings --> Menu
     Menu --> How[How to Play / five interactive steps]
     How --> Menu
@@ -126,6 +142,8 @@ flowchart TD
 The tutorial's practice state cannot modify a retained battle. Screens outside the battlefield freeze simulation. Camera gestures cancel troop drags and do not change troop ownership, counts, elapsed time or scoring. Settings difficulty is next-attempt only. Selection is independent of an active attempt; confirmation is required only for actual replacement. Cancel restores the previous paused screen/model, not a newly generated map.
 
 ## Simulation Flow
+
+Classic campaign and Run keep the direct-flight path. Experimental Logistics alone uses deterministic ID-ordered BFS with friendly interior tiles and a single adjacent attack hop. Each routed packet retains its full path and current leg; arrivals split the frame in time order, with existing stable packet ordering for simultaneous arrivals. FL06 stores this state, stable map ID and configuration/routing version. Classic continues writing FL05, with FL01-FL05 readers retained. Logistics records have their own checksummed preference component, and corrupt bytes are quarantined without touching campaign progress.
 
 ```mermaid
 flowchart TD

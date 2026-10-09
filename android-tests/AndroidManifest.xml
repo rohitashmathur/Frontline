@@ -5,4 +5,5 @@
     <instrumentation android:name="com.frontline.offline.tests.NativeV10Test" android:targetPackage="com.frontline.offline" />
     <instrumentation android:name="com.frontline.offline.tests.NativeV11Test" android:targetPackage="com.frontline.offline" />
     <instrumentation android:name="com.frontline.offline.tests.NativeV11RunTest" android:targetPackage="com.frontline.offline" />
+    <instrumentation android:name="com.frontline.offline.tests.NativeV11LogisticsTest" android:targetPackage="com.frontline.offline" />
 </manifest>
