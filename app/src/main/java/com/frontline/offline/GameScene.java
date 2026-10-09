@@ -30,6 +30,7 @@ public final class GameScene {
         public String language = "en";
         public Progress progress = new Progress();
         public PlaytestLog log = new PlaytestLog();
+        public RunState run, lastRun;
         public int totalScore() {
             int sum = 0;
             for (int i = 0; i < best.length; i++) {
@@ -56,7 +57,8 @@ public final class GameScene {
     }
     public static final int NONE = 0, PAUSE = 1, SECTORS = 2, SETTINGS = 3, RESULT = 4,
         SPLASH = 5, MENU = 6, TUTORIAL = 7, BRIEFING = 8, CONFIRM = 9,
-        CHALLENGES = 10, DAILY = 11, MASTERY = 12, HELP = 13, CAMERA_HELP = 14;
+        CHALLENGES = 10, DAILY = 11, MASTERY = 12, HELP = 13, CAMERA_HELP = 14,
+        RUN_HOME = 15, RUN_COUNCIL = 16, RUN_SUMMARY = 17;
     public static final int BACKGROUND = 0xFF17191B, PANEL = 0xFF232629;
     public static final int WHITE = 0xFFF0F7F7, MUTED = 0xFFA2ABA9, BORDER = 0xFF41494A;
     public static final int[] COLORS = {0xFF5DE0BA, 0xFFFF816C, 0xFFF6D477, 0xFFAC9EEF, 0xFF65B9F2, 0xFFED99BF};
@@ -78,6 +80,7 @@ public final class GameScene {
     private String previewDate = "", confirmationReason = "";
     private int confirmationReturn;
     private Runnable confirmedAction;
+    private long renderedCouncilNonce;
     private boolean improvedTime, improvedScore;
     private int feedbackType, feedbackUnits;
     private float feedbackTimer;
@@ -148,6 +151,11 @@ public final class GameScene {
         model = restored == null ? new GameModel(0, profile.difficulty, System.nanoTime()) : restored;
         hasBattle = restored != null;
         resultRecorded = restored != null && restored.outcome != GameModel.PLAYING;
+        if (restored != null && restored.battleMode == GameModel.MODE_RUN) {
+            if (profile.run == null) hasBattle = false;
+            else if (profile.run.matchesActiveBattle(restored)) resultRecorded = false;
+            else if (restored.outcome == GameModel.PLAYING) hasBattle = false;
+        }
         profile.reconcileProgress();
     }
 
@@ -181,6 +189,15 @@ public final class GameScene {
         if (model.captures != oldCaptures) events.cue(1);
         if (model.outcome != GameModel.PLAYING && !resultRecorded) {
             resultRecorded = true;
+            if (model.battleMode == GameModel.MODE_RUN) {
+                if (profile.run != null && profile.run.matchesActiveBattle(model)) {
+                    profile.run = profile.run.finishBattle(model);
+                    if (profile.run.terminal()) profile.lastRun = profile.run;
+                }
+                log("attempt_result",model.outcome == GameModel.WON ? "won" : "lost");
+                openRun(); events.cue(model.outcome == GameModel.WON ? 2 : 3);
+                events.changed(); return;
+            }
             if (model.outcome == GameModel.WON) {
                 int index = model.levelIndex;
                 if (model.objectiveType != 0) {
@@ -222,6 +239,9 @@ public final class GameScene {
         if (overlay == HELP) { drawHelp(g); return; }
         if (overlay == CONFIRM) { drawConfirmation(g); return; }
         if (overlay == CAMERA_HELP) { drawCameraHelp(g); return; }
+        if (overlay == RUN_HOME || overlay == RUN_COUNCIL || overlay == RUN_SUMMARY) {
+            drawRun(g); return;
+        }
         if (overlay == MENU || overlay == SETTINGS && previousOverlay == MENU) {
             drawMenu(g);
             if (overlay == MENU) return;
@@ -345,13 +365,13 @@ public final class GameScene {
             float size = Math.min(20,boardScale*.45f)*Math.min(1,2.5f/count.length());
             if (x >= 20 && x <= 400) g.text(count,x,y+size*.3f,size,WHITE,true,1);
             if (territory.owner >= 0) factionMark(g,x,y+node+6,Math.min(5,boardScale*.13f),model.level().faction(territory.owner),color);
-            if (territory.count() >= GameModel.troopCap(territory)) g.text("MAX",x,y-node+1,7,WHITE,true,1);
+            if (territory.count() >= model.capacity(territory)) g.text("MAX",x,y-node+1,7,WHITE,true,1);
             if (territory.id == model.objectiveTarget && model.objectiveType == Challenge.HOLD_KING)
                 g.polygon(new float[] {x,y-radius,x+5,y-radius+6,x,y-radius+12,x-5,y-radius+6},COLORS[2],WHITE,1);
             if (territory.capital) {
                 float baseline = y - node - 8;
                 g.polygon(new float[] {x-7,baseline,x-7,baseline-8,x-3,baseline-4,x,baseline-10,x+3,baseline-4,x+7,baseline-8,x+7,baseline}, color, 0, 0);
-            } else if (territory.owner != -1 && boardScale > 34 && territory.count() < GameModel.troopCap(territory)) {
+            } else if (territory.owner != -1 && boardScale > 34 && territory.count() < model.capacity(territory)) {
                 float progress = (float) (territory.troops - territory.count());
                 g.line(x-9, y+node+9, x+9, y+node+9, 2, mix(BACKGROUND,color,.35f));
                 g.line(x-9, y+node+9, x-9+18*progress, y+node+9, 2, color);
@@ -401,7 +421,7 @@ public final class GameScene {
         g.rect(0, top, 420, 139, 0, PANEL);
         g.line(0, top, 420, top, 1, BORDER);
         GameModel.Territory source = selected < 0 ? null : model.territories.get(selected);
-        g.text(source == null ? "ARMY" : "TILE "+(source.id+1)+(source.count() >= GameModel.troopCap(source) ? " / MAX" : ""),22,top+28,10,MUTED,true,0);
+        g.text(source == null ? "ARMY" : "TILE "+(source.id+1)+(source.count() >= model.capacity(source) ? " / MAX" : ""),22,top+28,10,MUTED,true,0);
         g.text(Integer.toString(source == null ? model.army(0) : source.count()),22,top+61,27,WHITE,true,0);
         g.text("DEPLOY", 195, top+28, 10, MUTED, true, 0);
         button(g, "quarter", "25%", 193, top+39, 64, 48, fraction == .25, false);
@@ -411,7 +431,8 @@ public final class GameScene {
             int sent = aimedAmount();
             boolean over = model.objectiveType == Challenge.BUDGET && model.unitsSent+sent > model.deploymentBudget;
             g.text(tr("deploy.preview",sent,source.count()-sent),22,height-22,11,over ? COLORS[1] : WHITE,true,0);
-        } else if (model.objectiveType == 0) g.text("3 STARS  "+time(model.level().parSeconds),22,height-22,11,MUTED,false,0);
+        } else if (model.battleMode == GameModel.MODE_RUN) g.text(tr("run.retries",profile.run == null ? 0 : profile.run.retriesRemaining()),22,height-22,11,MUTED,false,0);
+        else if (model.objectiveType == 0) g.text("3 STARS  "+time(model.level().parSeconds),22,height-22,11,MUTED,false,0);
         cameraButton(g,"zoom_out","Zoom Out",254,height-48);
         cameraButton(g,"fit_board","Fit Battlefield",304,height-48);
         cameraButton(g,"zoom_in","Zoom In",354,height-48);
@@ -474,6 +495,7 @@ public final class GameScene {
         button(g,"mastery","Mastery",216,row+108,182,44,false,true);
         button(g,"tutorial","How to Play",22,row+160,182,44,false,true);
         button(g,"help","Rules",216,row+160,182,44,false,true);
+        button(g,"run",tr("run.title"),22,row+212,376,44,false,true);
         int cleared = 0;
         for (int i = 0; i < profile.best.length; i++) if (profile.cleared(i)) cleared++;
         g.text(cleared + " / "+GameModel.LEVELS.length+" CLEARED", 52, height-40, 11, MUTED, true, 0);
@@ -839,7 +861,23 @@ public final class GameScene {
     }
 
     private boolean activeBattle() { return hasBattle && model.outcome == GameModel.PLAYING; }
+    private boolean unfinishedRun() { return profile.run != null && !profile.run.terminal(); }
+    private void openRun() {
+        cancel();
+        overlay = profile.run == null ? RUN_HOME : profile.run.status == RunState.COUNCIL ? RUN_COUNCIL
+            : profile.run.terminal() ? RUN_SUMMARY : RUN_HOME;
+    }
+    private void drawRun(final Graphics g) {
+        renderedCouncilNonce = profile.run == null ? 0 : profile.run.councilNonce;
+        final boolean unavailable = profile.run != null && profile.run.status == RunState.BATTLE
+            && (!hasBattle || !profile.run.matchesActiveBattle(model));
+        RunScreens.draw(g,height,profile.language,profile.run,(id,label,x,y,w,h,primary) -> {
+            if (!unavailable || !id.equals("continue_run")) button(g,id,label,x,y,w,h,primary,true);
+        });
+        if (unavailable) paragraph(g,tr("run.recovery"),22,height-190,376,12,COLORS[1],true,0);
+    }
     private String attemptName() {
+        if (unfinishedRun()) return tr("run.progress",profile.run.battlesCleared(),5);
         return model.dailyDate.isEmpty() ? model.objectiveType == 0 ? "Sector "+(model.levelIndex+1) : "Challenge / Sector "+(model.levelIndex+1) : "Daily "+model.dailyDate;
     }
     private void log(String event,String detail) { profile.log.add(events.now(),event,hasBattle ? model : null,detail); }
@@ -894,8 +932,8 @@ public final class GameScene {
         float y = modal(g,300);
         g.text("Replace Battle?",52,y+48,24,WHITE,true,0);
         g.text(attemptName()+" / "+time(model.elapsed),52,y+81,13,COLORS[2],true,0);
-        g.text("The unfinished attempt will be discarded.",52,y+115,13,WHITE,false,0);
-        g.text("Scores and completed sectors are kept.",52,y+139,12,MUTED,false,0);
+        paragraph(g,unfinishedRun() ? tr(confirmationReason.equals("run_abandon") ? "run.abandon_confirm" : confirmationReason.equals("run_restart") ? "run.restart_confirm" : "run.replace_confirm") : "The unfinished attempt will be discarded.",52,y+111,316,12,WHITE,false,0);
+        g.text("Scores and completed sectors are kept.",52,y+153,12,MUTED,false,0);
         button(g,"confirm_replace",confirmationReason.equals("restart") ? "Restart" : "Replace",52,y+169,316,46,true,true);
         button(g,"cancel_replace","Keep Battle",52,y+226,316,46,false,true);
     }
@@ -1011,7 +1049,8 @@ public final class GameScene {
         else if (overlay == CONFIRM) cancelReplacement();
         else if (overlay == HELP) overlay = helpReturn;
         else if (overlay == BRIEFING) overlay = previewMode == 0 ? MENU : previewMode == 1 ? CHALLENGES : DAILY;
-        else if (overlay == CHALLENGES || overlay == DAILY || overlay == MASTERY) overlay = MENU;
+        else if (overlay == CHALLENGES || overlay == DAILY || overlay == MASTERY
+            || overlay == RUN_HOME || overlay == RUN_COUNCIL || overlay == RUN_SUMMARY) overlay = MENU;
         else if (overlay == CAMERA_HELP) overlay = PAUSE;
         else if (overlay == SPLASH || overlay == RESULT) overlay = MENU;
         else if (overlay == TUTORIAL) {
@@ -1029,6 +1068,30 @@ public final class GameScene {
         if (id.equals("pause")) pause();
         else if (id.equals("resume")) { overlay = NONE; log("resume",""); }
         else if (id.equals("menu") || id.equals("home")) { cancel(); overlay = MENU; }
+        else if (id.equals("run")) openRun();
+        else if (id.equals("new_run")) requestReplacement(() -> {
+            profile.run = RunState.newRun(System.nanoTime()); hasBattle = false; openRun();
+        },"new_run");
+        else if (id.equals("begin_run_battle") && profile.run != null && profile.run.status == RunState.READY) {
+            profile.run = profile.run.beginBattle(); installAttempt(profile.run.createBattle());
+        }
+        else if (id.equals("continue_run") && profile.run != null && profile.run.matchesActiveBattle(model) && hasBattle) overlay = NONE;
+        else if (id.startsWith("perk_") && overlay == RUN_COUNCIL && profile.run != null) {
+            try { profile.run = profile.run.choosePerk(renderedCouncilNonce,Integer.parseInt(id.substring(5))); openRun(); }
+            catch (IllegalArgumentException | IllegalStateException stale) { /* The visible offer was superseded. */ }
+        }
+        else if (id.equals("run_retry") && profile.run != null && profile.run.status == RunState.RETRY_AVAILABLE) {
+            RunState.NodeOutcome[] outcomes = profile.run.outcomes();
+            profile.run = profile.run.retry(outcomes[outcomes.length-1].battle.nonce);
+            installAttempt(profile.run.createBattle());
+        }
+        else if (id.equals("run_end") && profile.run != null && profile.run.status == RunState.RETRY_AVAILABLE) {
+            profile.run = profile.run.abandon(true,profile.run.revision); profile.lastRun = profile.run; openRun();
+        }
+        else if (id.equals("run_abandon") && unfinishedRun()) requestReplacement(() -> {
+            profile.run = profile.run.abandon(true,profile.run.revision); profile.lastRun = profile.run;
+            hasBattle = false; openRun();
+        },"run_abandon");
         else if (id.equals("play")) {
             previewMode = 0; previewSector = profile.selectedSector; overlay = BRIEFING;
         }
@@ -1073,7 +1136,12 @@ public final class GameScene {
             else if (tutorialReady()) { tutorialStep++; log("tutorial_step","step="+(tutorialStep+1)); }
         }
         else if (id.equals("tutorial_skip") && overlay == TUTORIAL && !tutorialTerminal) finishTutorial(false);
-        else if (id.equals("restart")) { log("retry",""); requestReplacement(this::restartAttempt,"restart"); }
+        else if (id.equals("restart")) {
+            if (model.battleMode == GameModel.MODE_RUN && unfinishedRun()) requestReplacement(() -> {
+                model.surrender(); resultRecorded = false; overlay = NONE; update(0);
+            },"run_restart");
+            else { log("retry",""); requestReplacement(this::restartAttempt,"restart"); }
+        }
         else if (id.equals("next")) {
             log("next_sector",""); previewMode = 0; previewSector = Math.min(GameModel.LEVELS.length-1,model.levelIndex+1);
             profile.selectedSector = previewSector; overlay = BRIEFING;
@@ -1131,10 +1199,21 @@ public final class GameScene {
     }
 
     private void requestReplacement(Runnable action,String reason) {
-        if (!activeBattle()) { action.run(); return; }
+        if (!activeBattle() && !unfinishedRun()) { action.run(); return; }
         log(reason+"_request",""); cancel();
         confirmationReturn = overlay == NONE ? PAUSE : overlay;
-        confirmationReason = reason; confirmedAction = action; overlay = CONFIRM;
+        confirmationReason = reason;
+        final RunState protectedRun = unfinishedRun() ? profile.run : null;
+        confirmedAction = () -> {
+            if (protectedRun != null && (profile.run == null || !profile.run.id.equals(protectedRun.id)
+                || profile.run.revision != protectedRun.revision)) { openRun(); return; }
+            if (protectedRun != null && !reason.equals("run_abandon") && !reason.equals("run_restart")) {
+                profile.lastRun = protectedRun.abandon(true,protectedRun.revision); profile.run = null;
+                hasBattle = false;
+            }
+            action.run();
+        };
+        overlay = CONFIRM;
     }
 
     private void cancelReplacement() {

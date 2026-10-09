@@ -143,6 +143,14 @@ public final class MainActivity extends Activity {
                 String data = storage.getString("playtest-v10",null);
                 if (data != null) profile.log = PlaytestLog.restore(Base64.decode(data,Base64.DEFAULT));
             } catch (Exception invalidLog) { storage.edit().remove("playtest-v10").apply(); }
+            try {
+                String data = storage.getString("run-v11",null);
+                if (data != null) profile.run = RunState.restore(Base64.decode(data,Base64.DEFAULT));
+            } catch (Exception invalidRun) { storage.edit().remove("run-v11").commit(); }
+            try {
+                String data = storage.getString("last-run-v11",null);
+                if (data != null) profile.lastRun = RunState.restore(Base64.decode(data,Base64.DEFAULT));
+            } catch (Exception invalidRun) { storage.edit().remove("last-run-v11").commit(); }
             for (int i = 0; i < profile.best.length; i++) {
                 profile.best[i] = Math.max(0,storage.getInt("best-"+i,0));
                 profile.stars[i] = Math.max(0,Math.min(3,storage.getInt("stars-"+i,0)));
@@ -314,6 +322,10 @@ public final class MainActivity extends Activity {
             try {
                 edit.putString("progress-v10",Base64.encodeToString(profile.progress.save(),Base64.NO_WRAP));
                 edit.putString("playtest-v10",Base64.encodeToString(profile.log.save(),Base64.NO_WRAP));
+                if (profile.run != null) edit.putString("run-v11",Base64.encodeToString(profile.run.save(),Base64.NO_WRAP));
+                else edit.remove("run-v11");
+                if (profile.lastRun != null) edit.putString("last-run-v11",Base64.encodeToString(profile.lastRun.save(),Base64.NO_WRAP));
+                else edit.remove("last-run-v11");
                 if (scene.hasBattle) edit.putString("battle",Base64.encodeToString(scene.model.save(),Base64.NO_WRAP));
                 else edit.remove("battle");
             }

@@ -512,6 +512,8 @@ public final class Localization {
         add("menu.main", "Main Menu", "Menu Utama", "मुख्य मेनू");
         add("run.title", "Run Mode", "Mode Rangkaian", "पाँच लड़ाइयाँ");
         add("run.empty", "No run in progress.", "Tidak ada rangkaian aktif.", "कोई लड़ाई शृंखला जारी नहीं।");
+        add("run.recovery", "Saved battle unavailable. Abandon this run to start again.", "Pertempuran tersimpan tidak tersedia. Tinggalkan rangkaian ini untuk memulai lagi.", "सहेजी हुई लड़ाई उपलब्ध नहीं। फिर शुरू करने के लिए यह शृंखला छोड़ें।");
+        add("run.restart_confirm", "Restarting ends this battle as a defeat. Only the one run retry can replay it.", "Memulai ulang mengakhiri pertempuran ini sebagai kekalahan. Hanya satu kesempatan ulang rangkaian yang dapat memainkannya lagi.", "फिर शुरू करने पर यह लड़ाई हार मानी जाएगी। इसे दोबारा खेलने के लिए शृंखला का एकमात्र पुनः प्रयास इस्तेमाल होगा।");
         add("run.new", "New Run", "Rangkaian Baru", "नई शृंखला");
         add("run.continue", "Continue Run", "Lanjutkan Rangkaian", "शृंखला जारी रखें");
         add("run.progress", "{cleared} / {total} battles cleared", "{cleared} / {total} pertempuran selesai", "{cleared} / {total} लड़ाइयाँ जीतीं");

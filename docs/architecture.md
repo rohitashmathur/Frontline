@@ -16,6 +16,7 @@ flowchart LR
     Challenges[Challenge / objectives and UTC daily seed]
     Objective[ObjectiveResult / reason codes and record policy]
     Locale[Localization / English, Indonesian and Hindi]
+    Run[RunState / frozen nodes, council and retry snapshots]
     Log[PlaytestLog / bounded opt-in snapshots]
     Export[Android document picker / manual CSV]
     Storage[(SharedPreferences: frontline-v1)]
@@ -31,6 +32,8 @@ flowchart LR
     Scene --> Profile
     Profile --> Progress
     Profile --> Log
+    Profile --> Run
+    Run --> Model
     Scene --> Challenges
     Scene --> Objective
     Scene --> Locale
@@ -57,6 +60,7 @@ flowchart LR
 | Local measurement | Opt-in bounded event snapshots, checksummed persistence and escaped CSV, no Android/network dependency | `PlaytestLog.java` |
 | Objective result | Shared completion policy and persisted reason/argument interpretation; no mission speed stars | `ObjectiveResult.java` |
 | Localization | Offline stable keys and formatted sentences, shared by Android and portable tests | `Localization.java` |
+| Classic runs | Five frozen nodes, versioned perks, battle associations, idempotent councils/retry and factual summary | `RunState.java`, `RunScreens.java` |
 | Campaign | Ten story chapters, six named factions, rulers and short HUD names | `Campaign.java` |
 | Audio | Default-on looping music, independent enable flag, lifecycle pause/resume, Android audio focus | `BackgroundMusic.java` |
 | Test adapters | Java2D rendering, rule tests, Android fixture generation and preference probes | `tests/`, `tools/`, `scripts/` |
@@ -73,6 +77,16 @@ flowchart TD
     Menu --> Select[Chapter and sector selection]
     Select --> Menu
     Menu --> Settings[Settings]
+    Menu --> RunHome[New / Continue Run]
+    RunHome --> RunStart[Create associated frozen Classic battle]
+    RunStart --> Battle
+    Battle -->|Run result| RunResult{Run victory?}
+    RunResult -->|Battles 1-4| Council[Choose one actual unowned perk]
+    Council --> RunHome
+    RunResult -->|First loss| Retry[One same-seed retry or End]
+    Retry --> RunHome
+    RunResult -->|Fifth win / second loss| Summary[Factual run summary; no campaign rewards]
+    Summary --> Menu
     Settings --> Menu
     Menu --> How[How to Play / five interactive steps]
     How --> Menu

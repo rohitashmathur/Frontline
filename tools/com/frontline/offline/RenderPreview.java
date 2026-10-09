@@ -137,6 +137,21 @@ public final class RenderPreview implements GameScene.Graphics {
                 translated.start(level);
                 render(translated,360,532,new File(output,"v11-"+language+"-sector-"+(level+1)+".png"));
             }
+            localized.run = RunState.newRun(701);
+            for (int node = 0; node < 5; node++) {
+                GameScene runScene = new GameScene(localized,null,events); runScene.overlay = GameScene.RUN_HOME;
+                render(runScene,360,532,new File(output,"v11-"+language+"-run-ready-"+node+".png"));
+                localized.run = localized.run.beginBattle();
+                GameModel runModel = localized.run.createBattle();
+                runScene = new GameScene(localized,runModel,events); runScene.overlay = GameScene.NONE;
+                render(runScene,360,532,new File(output,"v11-"+language+"-run-battle-"+node+".png"));
+                runModel.outcome = GameModel.WON; runModel.terminalReason = GameModel.TERMINAL_VICTORY;
+                runModel.elapsed = 25+node; localized.run = localized.run.finishBattle(runModel);
+                runScene.overlay = node == 4 ? GameScene.RUN_SUMMARY : GameScene.RUN_COUNCIL;
+                render(runScene,360,532,new File(output,"v11-"+language+"-run-result-"+node+".png"));
+                render(runScene,420,900,new File(output,"v11-"+language+"-run-result-tall-"+node+".png"));
+                if (node < 4) localized.run = localized.run.choosePerk(localized.run.councilNonce,localized.run.councilOffer()[0]);
+            }
         }
         System.out.println("Rendered all 60 maps, ten chapter pages/endings, five tutorial steps, and zoom/pan states at compact and tall sizes.");
     }

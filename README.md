@@ -17,6 +17,8 @@ Install over V7, V6 or V5 to retain local progress; do not uninstall first. The 
 - Missions and Daily use objective-specific completion and records: elapsed completion time for Hold King, completion-only for Home Guard, and fewest troops deployed for Troop Budget, with time only breaking budget ties. Revised missions award no campaign speed stars. V10 records remain historical.
 - The model stores a defeat reason. Budget missions show used/remaining troops and warn before an excessive deployment; friendly reinforcement counts toward the allowance. Over-budget actions still lose rather than being silently cancelled.
 - Mission configurations, Daily generation and record evaluation are versioned. Continuing an older battle keeps its configuration, timers, difficulty and date.
+- Classic Run Mode has five curated battles, four councils, five exact non-stacking perks and one same-seed retry. Its frozen save, factual results and perks are isolated from campaign/mastery. Restarting a run battle counts as defeat.
+- The small [Balance Lab](tools/BALANCE_LAB.md) records matched seeds, actual-model controller/seat comparisons, durations and unresolved timeouts. The [human playtest checklist](docs/playtest-v11.md) remains pending execution.
 
 See [V11 Rules](docs/game-rules-v11.md) and the versioned verification reports for precise scope and remaining human-playtest work.
 
@@ -52,6 +54,9 @@ Settings now includes **Enter Code**. Enter exactly `12345` and select Unlock (o
 ## Documentation
 
 - [Application Architecture and Flow Diagrams](docs/architecture.md)
+- [Current V11 Rules](docs/game-rules-v11.md)
+- [V11 Phase 1 Verification](docs/verification-v11-phase1.md)
+- [V11 Balance Lab Verification](docs/verification-v11-phase2.md)
 - [V10 Game Logic and Preserved Balance Rules](docs/game-rules-v10.md)
 - [V10 Acceptance and Verification](docs/verification-v10.md)
 - [Native Android Screenshots](docs/screenshots.md)

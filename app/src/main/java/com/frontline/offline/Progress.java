@@ -340,7 +340,8 @@ public final class Progress {
     }
 
     private static boolean eligibleWin(GameModel model) {
-        return model != null && (model.rulesVersion == 10 || model.rulesVersion == 11) && model.outcome == GameModel.WON
+        return model != null && model.battleMode == GameModel.MODE_CAMPAIGN
+            && (model.rulesVersion == 10 || model.rulesVersion == 11) && model.outcome == GameModel.WON
             && model.difficulty >= 0 && model.difficulty < 3
             && validSeconds(model.elapsed);
     }

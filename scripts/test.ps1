@@ -13,7 +13,7 @@ $sources += (Get-ChildItem -LiteralPath (Join-Path $projectRoot 'tests'),(Join-P
 if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }
 & $java '-cp' $classes 'com.frontline.offline.GameModelTest'
 if ($LASTEXITCODE -ne 0) { throw 'Battle tests failed.' }
-foreach ($test in @('V11ModelTest','V11ProgressTest','V11SceneTest','LocalizationTest','V11BalanceTest')) {
+foreach ($test in @('V11ModelTest','V11ProgressTest','V11SceneTest','LocalizationTest','V11BalanceTest','RunStateTest','V11RunSceneTest','V11LogTest')) {
     if (Test-Path -LiteralPath (Join-Path $classes "com\frontline\offline\$test.class")) {
         & $java '-cp' $classes "com.frontline.offline.$test"
         if ($LASTEXITCODE -ne 0) { throw "$test failed." }

@@ -11,10 +11,10 @@ import java.util.zip.CRC32;
 /** Explicit, opt-in event snapshots; no lifecycle or abandonment inference. */
 public final class PlaytestLog {
     public static final int ENTRY_LIMIT = 500;
-    private static final int MAGIC = 0x464C3130, FORMAT = 1, MAX_SAVE_BYTES = 4 * 1024 * 1024;
-    private static final int EVENT_LIMIT = 128, DETAIL_LIMIT = 2048;
-    private static final int MENU = 0, CAMPAIGN = 1, CHALLENGE = 2, DAILY = 3;
-    private static final String[] MODES = {"menu", "campaign", "challenge", "daily"};
+    private static final int MAGIC = 0x464C3130, FORMAT = 2, MAX_SAVE_BYTES = 4 * 1024 * 1024;
+    private static final int EVENT_LIMIT = 128, DETAIL_LIMIT = 2048, RUN_ID_LIMIT = 128;
+    private static final int MENU = 0, CAMPAIGN = 1, CHALLENGE = 2, DAILY = 3, RUN = 4, LOGISTICS = 5;
+    private static final String[] MODES = {"menu", "campaign", "challenge", "daily", "run", "logistics"};
     private final ArrayDeque<Entry> entries = new ArrayDeque<>();
     public boolean enabled = false;
 
@@ -25,6 +25,9 @@ public final class PlaytestLog {
         int objectiveType, objectiveTarget = -1, deploymentBudget, challengeId = -1, outcome = -1;
         boolean seedKnown, historyKnown, startingKingLost;
         float elapsed, objectiveSeconds, objectiveProgress;
+        boolean metadataKnown;
+        int battleMode = -1, runNode = -1, runPerks, terminalReason = -1;
+        String runId = "";
     }
 
     public void add(long wallMillis, String event, GameModel model, String detail) {
@@ -45,7 +48,13 @@ public final class PlaytestLog {
             entry.objectiveProgress = model.objectiveProgress; entry.deploymentBudget = model.deploymentBudget;
             entry.dailyDate = model.dailyDate == null ? "" : model.dailyDate;
             entry.outcome = model.outcome;
-            entry.mode = !entry.dailyDate.isEmpty() ? DAILY : entry.objectiveType > 0 ? CHALLENGE : CAMPAIGN;
+            entry.metadataKnown = true;
+            entry.battleMode = model.battleMode; entry.runId = model.runId;
+            entry.runNode = model.runNode; entry.runPerks = model.runPerks;
+            entry.terminalReason = model.terminalReason;
+            entry.mode = model.battleMode == GameModel.MODE_RUN ? RUN
+                : model.battleMode == GameModel.MODE_LOGISTICS ? LOGISTICS
+                : !entry.dailyDate.isEmpty() ? DAILY : entry.objectiveType > 0 ? CHALLENGE : CAMPAIGN;
         }
         try {
             validate(entry);
@@ -66,7 +75,8 @@ public final class PlaytestLog {
         appendRow(csv, "timestamp_ms", "event", "sector", "sector_index", "difficulty", "difficulty_id",
             "mode", "rules_version", "ai_version", "seed", "seed_known", "history_known",
             "starting_king_lost", "elapsed_seconds", "objective_type", "objective_target", "objective_seconds",
-            "objective_progress", "deployment_budget", "challenge_id", "daily_date", "outcome", "detail");
+            "objective_progress", "deployment_budget", "challenge_id", "daily_date", "outcome", "detail",
+            "battle_mode", "run_id", "run_node", "run_perks", "terminal_reason");
         for (Entry entry : entries) {
             appendRow(csv, Long.toString(entry.wallMillis), entry.event,
                 entry.sector < 0 ? "" : Integer.toString(entry.sector + 1),
@@ -81,7 +91,11 @@ public final class PlaytestLog {
                 Float.toString(entry.objectiveSeconds), Float.toString(entry.objectiveProgress),
                 Integer.toString(entry.deploymentBudget),
                 entry.challengeId < 0 ? "" : Integer.toString(entry.challengeId), entry.dailyDate,
-                entry.outcome < 0 ? "" : Integer.toString(entry.outcome), entry.detail);
+                entry.outcome < 0 ? "" : Integer.toString(entry.outcome), entry.detail,
+                entry.metadataKnown ? Integer.toString(entry.battleMode) : "",
+                entry.runId, entry.mode == RUN ? Integer.toString(entry.runNode) : "",
+                entry.mode == RUN ? Integer.toString(entry.runPerks) : "",
+                entry.metadataKnown ? Integer.toString(entry.terminalReason) : "");
         }
         return csv.toString();
     }
@@ -116,6 +130,7 @@ public final class PlaytestLog {
             DataOutputStream out = new DataOutputStream(bytes);
             out.writeInt(MAGIC); out.writeInt(FORMAT); out.writeBoolean(enabled); out.writeInt(entries.size());
             for (Entry entry : entries) {
+                validate(entry);
                 out.writeLong(entry.wallMillis); out.writeUTF(entry.event);
                 out.writeInt(entry.sector); out.writeInt(entry.difficulty); out.writeInt(entry.mode);
                 out.writeInt(entry.rulesVersion); out.writeInt(entry.aiVersion);
@@ -126,6 +141,9 @@ public final class PlaytestLog {
                 out.writeFloat(entry.objectiveProgress); out.writeInt(entry.deploymentBudget);
                 out.writeInt(entry.challengeId); out.writeUTF(entry.dailyDate);
                 out.writeInt(entry.outcome); out.writeUTF(entry.detail);
+                out.writeBoolean(entry.metadataKnown); out.writeInt(entry.battleMode);
+                out.writeUTF(entry.runId); out.writeInt(entry.runNode); out.writeInt(entry.runPerks);
+                out.writeInt(entry.terminalReason);
             }
             out.flush();
             CRC32 crc = new CRC32(); crc.update(bytes.toByteArray());
@@ -143,7 +161,9 @@ public final class PlaytestLog {
         DataInputStream checksum = new DataInputStream(new ByteArrayInputStream(bytes, bytes.length - 4, 4));
         if (checksum.readInt() != (int) crc.getValue()) throw new IOException("Invalid playtest log checksum");
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes, 0, bytes.length - 4));
-        if (in.readInt() != MAGIC || in.readInt() != FORMAT) throw new IOException("Unknown playtest log version");
+        if (in.readInt() != MAGIC) throw new IOException("Unknown playtest log version");
+        int format = in.readInt();
+        if (format != 1 && format != FORMAT) throw new IOException("Unknown playtest log version");
         PlaytestLog result = new PlaytestLog();
         result.enabled = readFlag(in);
         int count = in.readInt();
@@ -160,6 +180,11 @@ public final class PlaytestLog {
             entry.objectiveProgress = in.readFloat(); entry.deploymentBudget = in.readInt();
             entry.challengeId = in.readInt(); entry.dailyDate = in.readUTF();
             entry.outcome = in.readInt(); entry.detail = in.readUTF();
+            if (format >= 2) {
+                entry.metadataKnown = readFlag(in); entry.battleMode = in.readInt();
+                entry.runId = in.readUTF(); entry.runNode = in.readInt(); entry.runPerks = in.readInt();
+                entry.terminalReason = in.readInt();
+            }
             validate(entry);
             result.entries.addLast(entry);
         }
@@ -176,7 +201,7 @@ public final class PlaytestLog {
     private static void validate(Entry entry) throws IOException {
         if (entry.wallMillis < 0 || entry.event.isEmpty() || entry.event.length() > EVENT_LIMIT
             || entry.detail.length() > DETAIL_LIMIT || entry.dailyDate.length() > 10
-            || entry.mode < MENU || entry.mode > DAILY
+            || entry.mode < MENU || entry.mode > LOGISTICS
             || entry.rulesVersion < 0 || entry.rulesVersion > 1000 || entry.aiVersion < 0 || entry.aiVersion > 1000
             || !Float.isFinite(entry.elapsed) || entry.elapsed < 0 || entry.elapsed > 86400
             || entry.objectiveTarget < -1 || entry.objectiveTarget > 1000 || entry.deploymentBudget < 0
@@ -200,6 +225,33 @@ public final class PlaytestLog {
                 || entry.mode == CHALLENGE && (entry.objectiveType == 0 || entry.challengeId < 0 || !entry.dailyDate.isEmpty())
                 || entry.mode == DAILY && (entry.objectiveType == 0 || entry.dailyDate.isEmpty()))
                 throw new IOException("Invalid playtest context");
+        }
+        validateMetadata(entry);
+    }
+
+    private static void validateMetadata(Entry entry) throws IOException {
+        if (entry.runId == null || entry.runId.length() > RUN_ID_LIMIT)
+            throw new IOException("Invalid run identity");
+        if (!entry.metadataKnown) {
+            if (entry.mode > DAILY || entry.battleMode != -1 || !entry.runId.isEmpty()
+                || entry.runNode != -1 || entry.runPerks != 0 || entry.terminalReason != -1)
+                throw new IOException("Invalid historical playtest metadata");
+            return;
+        }
+        if (entry.mode == MENU || entry.battleMode < GameModel.MODE_CAMPAIGN || entry.battleMode > GameModel.MODE_LOGISTICS
+            || entry.terminalReason < GameModel.TERMINAL_NONE || entry.terminalReason > GameModel.TERMINAL_VICTORY
+            || (entry.mode == RUN ? entry.battleMode != GameModel.MODE_RUN
+                : entry.mode == LOGISTICS ? entry.battleMode != GameModel.MODE_LOGISTICS
+                : entry.battleMode != GameModel.MODE_CAMPAIGN))
+            throw new IOException("Invalid playtest battle metadata");
+        if (entry.mode == RUN) {
+            if (entry.runId.isEmpty() || entry.runNode < 0 || entry.runNode >= 5
+                || (entry.runPerks & ~GameModel.ALL_RUN_PERKS) != 0
+                || entry.rulesVersion == 0 || entry.objectiveType != Challenge.CAMPAIGN
+                || entry.challengeId != -1 || !entry.dailyDate.isEmpty())
+                throw new IOException("Invalid playtest run association");
+        } else if (!entry.runId.isEmpty() || entry.runNode != -1 || entry.runPerks != 0) {
+            throw new IOException("Unexpected playtest run association");
         }
     }
 }

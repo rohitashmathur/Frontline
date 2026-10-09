@@ -293,7 +293,7 @@ public final class V10ProgressTest {
         rejectLog(null); rejectLog(new byte[4 * 1024 * 1024 + 1]);
         for (int length : new int[] {0, 1, 8, empty.length / 2, empty.length - 1}) rejectLog(Arrays.copyOf(empty, length));
         byte[] corrupt = empty.clone(); corrupt[0] ^= 1; rejectLog(corrupt);
-        rejectLog(patchInt(empty, 0, 0)); rejectLog(patchInt(empty, 4, 2));
+        rejectLog(patchInt(empty, 0, 0)); rejectLog(patchInt(empty, 4, 3));
         rejectLog(patchByte(empty, 8, 2));
         rejectLog(patchInt(empty, 9, -1)); rejectLog(patchInt(empty, 9, 501));
         rejectLog(withExtraBody(empty));

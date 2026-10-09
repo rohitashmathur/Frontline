@@ -35,6 +35,16 @@ The existing local profile and legacy battle readers are retained. The battle ex
 
 New record data extends the CRC-protected progress format while reading FP10 history. Corruption is isolated to the affected saved component; it must not erase campaign unlocks, settings or unrelated records. No backend or cloud migration is involved.
 
+## Classic Run Mode
+
+A run has exactly five frozen Classic maps (sectors 1, 3, 9, 25 and 37), with visible Easy/Normal/Normal/Hard/Hard difficulties and up to five rivals. Four councils award one unowned perk each. The first three offer three distinct choices; the last offers the remaining two. Perks are non-stacking and player-only: ordinary production +8%, king production +15%, convoy speed +12%, king cap +15, or starting king troops +10. They never apply to campaign or missions.
+
+One run-wide retry repeats the same node seed and selected perks with a new battle association. A second loss ends the run. Toolbar restart explicitly records defeat before offering the remaining retry; it cannot grant free rerolls. Declining a retry ends without adding a fictitious second loss. Run summaries contain factual battles, elapsed time, captures, losses, perks and retries, with no farmable campaign score or mastery rewards.
+
+Run state is an independent checksummed snapshot with frozen maps, rule/perk versions, actual ordered offers, outcomes and battle nonces. It and the single battle slot are saved in one synchronous preferences transaction. A restored terminal battle is recorded once. Switching modes protects every unfinished run state, including councils and retry offers. Missing/mismatched battles require explicit abandonment, never reconstruction after play began. Corrupt run data cannot wipe campaign progress.
+
+The proposed 10-15 minute run length and perk balance remain hypotheses for human testing.
+
 ## Validation Limits
 
 Automated seed simulations measure determinism and defined success/failure gates, not human difficulty, enjoyment or linguistic quality. Fluent-speaker review, physical-device behaviour and human sessions remain separate evidence requirements. See the V11 verification reports for actual executed checks.
