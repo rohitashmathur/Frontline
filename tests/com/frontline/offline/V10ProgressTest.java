@@ -31,39 +31,48 @@ public final class V10ProgressTest {
     }
 
     private static void campaignRecords() {
+        campaignRecords(10);
+        campaignRecords(11);
+    }
+
+    private static void campaignRecords(int rules) {
         Progress progress = new Progress();
         check(progress.best.length == 3 && progress.best[0].length == 60
+            && progress.historicalCampaignBest.length == 3 && progress.historicalCampaignBest[0].length == 60
             && progress.challengeBest.length == 3 && progress.challengeBest[0].length == 9, "Record dimensions");
         for (int d = 0; d < 3; d++) {
-            GameModel model = won(0, d, 130 - d * 20, d + 2);
+            GameModel model = won(0, d, 130 - d * 20, d + 2, rules);
             check(progress.recordCampaign(model), "First winning time improves its difficulty record");
-            check(progress.best[d][0] == model.score() && progress.stars[d][0] == model.stars()
-                && progress.times[d][0] == model.elapsed, "Use model scoring and stars unchanged");
+            check(progress.campaignBest(0, d, rules) == model.score() && progress.campaignStars(0, d, rules) == model.stars()
+                && progress.campaignTime(0, d, rules) == model.elapsed, "Use matching-rules model scoring and stars unchanged");
             check(!progress.recordCampaign(model), "Repeated result does not improve time");
         }
-        int easyScore = progress.best[0][0], easyStars = progress.stars[0][0];
-        float easyTime = progress.times[0][0];
-        GameModel higherScore = won(0, 1, 200, 50);
+        int easyScore = progress.campaignBest(0, 0, rules), easyStars = progress.campaignStars(0, 0, rules);
+        float easyTime = progress.campaignTime(0, 0, rules);
+        GameModel higherScore = won(0, 1, 200, 50, rules);
         check(!progress.recordCampaign(higherScore), "Higher score alone is not a time improvement");
-        check(progress.best[1][0] == higherScore.score() && progress.times[1][0] == 110
-            && progress.stars[1][0] == 2, "Independent best score, stars, and time");
-        GameModel faster = won(0, 1, 20, 0);
-        check(progress.recordCampaign(faster) && progress.times[1][0] == 20 && progress.stars[1][0] == 3
-            && progress.best[1][0] == higherScore.score(), "Faster time cannot erase a higher score");
-        check(progress.best[0][0] == easyScore && progress.stars[0][0] == easyStars
-            && progress.times[0][0] == easyTime, "Other difficulties remain unchanged");
-        check(progress.recordCampaign(won(59, 2, 0, 0)), "Zero-second first record is representable");
-        check(!progress.recordCampaign(won(59, 2, 0, 0)), "Zero-second record remains idempotent");
+        check(progress.campaignBest(0, 1, rules) == higherScore.score() && progress.campaignTime(0, 1, rules) == 110
+            && progress.campaignStars(0, 1, rules) == 2, "Independent best score, stars, and time");
+        GameModel faster = won(0, 1, 20, 0, rules);
+        check(progress.recordCampaign(faster) && progress.campaignTime(0, 1, rules) == 20 && progress.campaignStars(0, 1, rules) == 3
+            && progress.campaignBest(0, 1, rules) == higherScore.score(), "Faster time cannot erase a higher score");
+        check(progress.campaignBest(0, 0, rules) == easyScore && progress.campaignStars(0, 0, rules) == easyStars
+            && progress.campaignTime(0, 0, rules) == easyTime, "Other difficulties remain unchanged");
+        int otherRules = rules == 10 ? 11 : 10;
+        check(progress.campaignBest(0, 1, otherRules) == 0 && progress.campaignStars(0, 1, otherRules) == 0
+            && progress.campaignTime(0, 1, otherRules) == 0, "Other campaign rules remain unchanged");
+        check(progress.recordCampaign(won(59, 2, 0, 0, rules)), "Zero-second first record is representable");
+        check(!progress.recordCampaign(won(59, 2, 0, 0, rules)), "Zero-second record remains idempotent");
         byte[] before = progress.save();
         for (int outcome : new int[] {GameModel.PLAYING, GameModel.LOST}) {
-            GameModel model = won(4, 1, 40, 2); model.outcome = outcome;
+            GameModel model = won(4, 1, 40, 2, rules); model.outcome = outcome;
             check(!progress.recordCampaign(model), "Only victories count");
         }
         for (float elapsed : new float[] {-1, Float.NaN, Float.POSITIVE_INFINITY, 86401}) {
-            GameModel model = won(4, 1, 40, 2); model.elapsed = elapsed;
+            GameModel model = won(4, 1, 40, 2, rules); model.elapsed = elapsed;
             check(!progress.recordCampaign(model), "Reject invalid result time");
         }
-        GameModel invalidDifficulty = won(4, 1, 40, 2); invalidDifficulty.difficulty = 3;
+        GameModel invalidDifficulty = won(4, 1, 40, 2, rules); invalidDifficulty.difficulty = 3;
         check(!progress.recordCampaign(invalidDifficulty) && !progress.recordCampaign(null), "Invalid result is harmless");
         check(Arrays.equals(before, progress.save()), "Ignored results do not mutate records or awards");
     }
@@ -76,9 +85,9 @@ public final class V10ProgressTest {
         check(!progress.recordCampaign(legacy), "Legacy win is not assigned a new difficulty record");
         legacy.objectiveType = 1; legacy.challengeId = 0;
         check(!progress.recordChallenge(legacy), "Legacy win cannot manufacture objective mastery");
-        for (int rules : new int[] {0, 7, 9, 11}) {
+        for (int rules : new int[] {0, 7, 9, 12}) {
             GameModel model = won(0, 1, 20, 2); model.rulesVersion = rules;
-            check(!progress.recordCampaign(model), "Only actual V10 rules count");
+            check(!progress.recordCampaign(model), "Only supported Classic campaign rules count");
         }
         check(Arrays.equals(before, progress.save()) && progress.earnedCount() == 0, "Legacy records and unknown history are not migrated");
     }
@@ -192,11 +201,11 @@ public final class V10ProgressTest {
     private static void progressPersistence() throws Exception {
         byte[] empty = new Progress().save();
         check(Arrays.equals(empty, Progress.restore(empty).save()), "Empty progress round trip");
-        rejectProgress(null); rejectProgress(new byte[16385]);
+        rejectProgress(null); rejectProgress(new byte[1024 * 1024 + 1]);
         for (int length : new int[] {0, 1, 8, empty.length / 2, empty.length - 1}) rejectProgress(Arrays.copyOf(empty, length));
         byte[] corrupt = empty.clone(); corrupt[20] ^= 1; rejectProgress(corrupt);
         rejectProgress(patchInt(empty, 0, 0));
-        rejectProgress(patchInt(empty, 4, 2));
+        rejectProgress(patchInt(empty, 4, 4));
         rejectProgress(patchInt(empty, 8, -1));
         rejectProgress(patchInt(empty, 12, 4));
         rejectProgress(patchInt(empty, 16, Float.floatToIntBits(Float.NaN)));
@@ -216,7 +225,8 @@ public final class V10ProgressTest {
 
     private static void logging() throws Exception {
         PlaytestLog log = new PlaytestLog();
-        GameModel model = new GameModel(2, 2, Long.MIN_VALUE); model.elapsed = 12.5f; model.aiVersion = 1;
+        GameModel model = new GameModel(2, 2, Long.MIN_VALUE, GameModel.LEGACY_RULES_VERSION);
+        model.elapsed = 12.5f; model.aiVersion = 1;
         log.add(1000, "attempt_start", model, "disabled");
         check(!log.enabled && log.size() == 0 && csv(log.exportCsv()).size() == 1, "Logging is opt-in, including export");
         log.enabled = true;
@@ -301,14 +311,20 @@ public final class V10ProgressTest {
     }
 
     private static GameModel won(int sector, int difficulty, float elapsed, int captures) {
-        GameModel model = new GameModel(sector, difficulty, 100 + sector);
+        return won(sector, difficulty, elapsed, captures, GameModel.RULES_VERSION);
+    }
+
+    private static GameModel won(int sector, int difficulty, float elapsed, int captures, int rules) {
+        GameModel model = new GameModel(sector, difficulty, 100 + sector, rules);
         model.outcome = GameModel.WON; model.elapsed = elapsed; model.captures = captures;
         for (GameModel.Territory tile : model.territories) tile.owner = GameModel.PLAYER;
         return model;
     }
 
     private static GameModel challenge(int type, int id, int difficulty, float elapsed) {
-        GameModel model = won(0, difficulty, elapsed, 2);
+        GameModel model = won(0, difficulty, elapsed, 2, GameModel.LEGACY_RULES_VERSION);
+        model.missionConfigVersion = Challenge.LEGACY_CONFIG_VERSION;
+        model.dailyVersion = Challenge.LEGACY_DAILY_VERSION;
         model.objectiveType = type; model.challengeId = id;
         return model;
     }
@@ -349,8 +365,9 @@ public final class V10ProgressTest {
     }
 
     private static boolean emptyCampaign(Progress progress) {
-        for (int d = 0; d < 3; d++) for (int i = 0; i < 60; i++)
-            if (progress.best[d][i] != 0 || progress.stars[d][i] != 0 || progress.times[d][i] != 0) return false;
+        for (int rules : new int[] {0, 10, 11}) for (int d = 0; d < 3; d++) for (int i = 0; i < 60; i++)
+            if (progress.campaignBest(i, d, rules) != 0 || progress.campaignStars(i, d, rules) != 0
+                || progress.campaignTime(i, d, rules) != 0 || progress.campaignCleared(i, d)) return false;
         return true;
     }
 

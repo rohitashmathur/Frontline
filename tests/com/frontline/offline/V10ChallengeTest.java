@@ -26,7 +26,7 @@ public final class V10ChallengeTest {
     private static void presets() throws Exception {
         check(Challenge.CAMPAIGN == 0 && Challenge.HOLD_KING == 1
             && Challenge.KEEP_KING == 2 && Challenge.BUDGET == 3, "Objective IDs remain stable");
-        check("daily-v10-1".equals(Challenge.DAILY_VERSION), "Daily rules version is explicit");
+        check("daily-v10-1".equals(Challenge.LEGACY_DAILY_VERSION) && "daily-v11-2".equals(Challenge.DAILY_VERSION), "Daily rules versions are explicit");
         String[] names = {"Crown Watch", "Three Front Watch", "Gilded Watch", "Home Guard",
             "Province Guard", "Veiled Guard", "Lean Frontier", "Lean Three Fronts", "Lean Gilded Front"};
         int[] sectors = {0, 2, 12, 0, 8, 18, 0, 2, 12};
@@ -51,7 +51,8 @@ public final class V10ChallengeTest {
                 GameModel campaign = new GameModel(preset.sector, difficulty, 710 + i);
                 model.update(.1f); campaign.update(.1f);
                 for (int tile = 0; tile < model.territories.size(); tile++)
-                    check(model.territories.get(tile).troops == campaign.territories.get(tile).troops,
+                    check(model.territories.get(tile).troops == campaign.territories.get(tile).troops
+                        || model.missionPressure != 0 && model.territories.get(tile).owner == GameModel.NEUTRAL,
                         "Challenge AI version does not add a production bonus");
             }
             if (type == Challenge.HOLD_KING)
@@ -74,6 +75,12 @@ public final class V10ChallengeTest {
             expected.originalKing(challenge.type == Challenge.HOLD_KING ? 1 : GameModel.PLAYER),
             challenge.seconds, challenge.budget);
         expected.challengeId = id; expected.dailyDate = date == null ? "" : date; expected.aiVersion = 1;
+        expected.dailyVersion = expected.dailyDate.isEmpty() ? "" : Challenge.DAILY_VERSION;
+        expected.missionPressure = actual.missionPressure;
+        for (int tile = 0; tile < expected.territories.size(); tile++) if (expected.missionPressure != 0
+            && expected.territories.get(tile).owner == GameModel.NEUTRAL)
+            expected.territories.get(tile).troops = Math.max(1,Math.floor(expected.territories.get(tile).troops
+                *(expected.missionPressure == GameModel.DEFENCE_HOME ? .4 : .15)));
         check(actual.levelIndex == challenge.sector && actual.difficulty == difficulty,
             "Factory preserves sector and caller's fixed difficulty");
         check(actual.challengeId == id && actual.dailyDate.equals(expected.dailyDate) && actual.aiVersion == 1,
@@ -184,8 +191,9 @@ public final class V10ChallengeTest {
             3506050238638704035L, 6306319856464079119L, 6962207422773575449L};
         int[] ids = {5, 4, 8, 5, 7, 1};
         for (int i = 0; i < dates.length; i++) {
-            check(Challenge.dailySeed(dates[i]) == seeds[i], "Version/date FNV-1a seed is stable: " + dates[i]);
-            check(Challenge.dailyId(dates[i]) == ids[i], "Daily preset uses signed floorMod, including negative seeds");
+            check(Challenge.dailySeed(dates[i],Challenge.LEGACY_DAILY_VERSION) == seeds[i], "Legacy version/date FNV-1a seed is stable: " + dates[i]);
+            check(Challenge.dailyId(dates[i],Challenge.LEGACY_DAILY_VERSION) == ids[i], "Legacy daily preset uses signed floorMod, including negative seeds");
+            check(Challenge.dailySeed(dates[i]) != seeds[i], "New daily identity does not reinterpret legacy dates");
         }
         String[] rotation = new String[Challenge.PRESETS.length];
         Set<Long> uniqueSeeds = new HashSet<>();
@@ -217,8 +225,8 @@ public final class V10ChallengeTest {
                         "Device locale/time zone cannot change the daily UTC date");
                     check(Challenge.validDate("2000-02-29") && !Challenge.validDate("1900-02-29"),
                         "Device locale cannot change Gregorian date validation");
-                    check(Challenge.dailySeed("2026-10-06") == 3506050238638704035L
-                        && Challenge.dailyId("2026-10-06") == 5 && Challenge.untilReset(before) == 1,
+                    check(Challenge.dailySeed("2026-10-06",Challenge.LEGACY_DAILY_VERSION) == 3506050238638704035L
+                        && Challenge.dailyId("2026-10-06",Challenge.LEGACY_DAILY_VERSION) == 5 && Challenge.untilReset(before) == 1,
                         "Device locale/time zone cannot change the seed, preset, or reset countdown");
                 }
             }

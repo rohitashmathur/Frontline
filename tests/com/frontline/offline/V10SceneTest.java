@@ -275,7 +275,7 @@ public final class V10SceneTest {
         check(field(csv, abandoned, "elapsed_seconds").equals(Float.toString(elapsed))
             && field(csv, abandoned, "sector_index").equals("2")
             && field(csv, abandoned, "difficulty_id").equals("1")
-            && field(csv, abandoned, "rules_version").equals("10"), "Decision snapshots retain factual duration and attempt context");
+            && field(csv, abandoned, "rules_version").equals(Integer.toString(GameModel.RULES_VERSION)), "Decision snapshots retain factual duration and attempt context");
         click(f, "restart"); click(f, "cancel_replace"); click(f, "resume");
         check(eventCount(f, "restart_request") == 1 && eventCount(f, "restart_cancel") == 1
             && eventCount(f, "abandon") == 1, "Cancelled restart is an explicit decision, not another abandonment");
@@ -305,11 +305,13 @@ public final class V10SceneTest {
             check(model.objectiveTarget == model.originalKing(preset.type == Challenge.HOLD_KING ? 1 : 0)
                 && model.aiVersion == 1, "Scene missions use the agreed king target and AI version");
             check(render(f).has(preset.type == Challenge.HOLD_KING ? "HOLD MARKED KING" :
-                preset.type == Challenge.KEEP_KING ? "KEEP STARTING KING" : "DEPLOYMENT BUDGET"),
+                preset.type == Challenge.KEEP_KING ? "KEEP STARTING KING" : "BUDGET"),
                 "The objective remains visible during play");
             finishFixture(f, GameModel.WON, Math.max(20, preset.seconds));
-            check(profile.progress.challengeBest[id % 3][id] == model.score()
-                && profile.progress.challengeTimes[id % 3][id] == model.elapsed, "Mission results have separate per-difficulty records");
+            Progress.MissionRecord missionRecord = profile.progress.missionRecord(model);
+            check(missionRecord.completed && (preset.type == Challenge.KEEP_KING ? missionRecord.bestElapsed == 0
+                : preset.type == Challenge.BUDGET ? missionRecord.bestUnits == model.unitsSent
+                : missionRecord.bestElapsed == model.elapsed), "Mission records use objective-specific, difficulty-isolated metrics");
             check(!has(f, "next") && "Missions".equals(label(f, "challenges")), "Mission results do not route to campaign Next Sector");
             check(profile.selectedSector == 0 && Arrays.equals(campaign, campaignState(profile)),
                 "Mission starts and wins cannot select, clear or unlock campaign sectors");
@@ -354,8 +356,8 @@ public final class V10SceneTest {
             click(restored, "restart"); click(restored, "confirm_replace");
             check(Arrays.equals(initial, restored.scene.model.save()), "Daily restart after midnight repeats its original Normal setup and seed");
             finishFixture(restored, GameModel.WON, Math.max(20, preset.seconds));
-            check(profile.progress.dailyBest(dates[0]) == restored.scene.model.score()
-                && profile.progress.dailyBest(dates[1]) == 0 && profile.progress.challengeBest[1][id] == 0,
+            check(profile.progress.missionRecord(restored.scene.model).completed
+                && profile.progress.dailyBest(dates[1]) == 0 && !profile.progress.challengeCompleted(id,1),
                 "A retained daily result belongs only to its original date, not today or ordinary missions");
             check(profile.selectedSector == 0 && Arrays.equals(campaign, campaignState(profile)),
                 "Daily results never select, unlock or clear campaign sectors");

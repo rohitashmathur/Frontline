@@ -1,6 +1,6 @@
-# Frontline Architecture (V10)
+# Frontline Architecture (V11)
 
-Frontline 0.10.0 is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in.
+Frontline 0.11.0 is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in.
 
 ## Components
 
@@ -14,6 +14,8 @@ flowchart LR
     Profile[Profile / scores, unlocks and settings]
     Progress[Progress / per-difficulty records and mastery]
     Challenges[Challenge / objectives and UTC daily seed]
+    Objective[ObjectiveResult / reason codes and record policy]
+    Locale[Localization / English, Indonesian and Hindi]
     Log[PlaytestLog / bounded opt-in snapshots]
     Export[Android document picker / manual CSV]
     Storage[(SharedPreferences: frontline-v1)]
@@ -30,6 +32,9 @@ flowchart LR
     Profile --> Progress
     Profile --> Log
     Scene --> Challenges
+    Scene --> Objective
+    Scene --> Locale
+    Progress --> Objective
     Challenges --> Model
     View --> Export
     Export --> Log
@@ -50,6 +55,8 @@ flowchart LR
 | Challenge catalogue | Nine validated objective presets, configurable objectives, deterministic UTC date/version seeds and reset countdown | `Challenge.java` |
 | New progress | Difficulty-specific campaign/challenge records, bounded daily bests, mastery progress/awards and cosmetic selection | `Progress.java` |
 | Local measurement | Opt-in bounded event snapshots, checksummed persistence and escaped CSV, no Android/network dependency | `PlaytestLog.java` |
+| Objective result | Shared completion policy and persisted reason/argument interpretation; no mission speed stars | `ObjectiveResult.java` |
+| Localization | Offline stable keys and formatted sentences, shared by Android and portable tests | `Localization.java` |
 | Campaign | Ten story chapters, six named factions, rulers and short HUD names | `Campaign.java` |
 | Audio | Default-on looping music, independent enable flag, lifecycle pause/resume, Android audio focus | `BackgroundMusic.java` |
 | Test adapters | Java2D rendering, rule tests, Android fixture generation and preference probes | `tests/`, `tools/`, `scripts/` |
@@ -76,7 +83,7 @@ flowchart TD
     Confirm -->|Cancel / keep exact model| Brief
     Confirm -->|Replace| Start[Create clean attempt / log explicit abandonment]
     Replace -->|No| Start
-    Start --> First{Tutorial completed?}
+    Start --> First{Tutorial seen?}
     First -->|No| Tutorial[Staged practical tutorial / Skip]
     First -->|Yes| Guide[First-large-map camera guide if needed]
     Tutorial --> Guide
@@ -137,6 +144,8 @@ Collision tests use relative motion over the tick, not a single rendered positio
 - New Base64 keys `progress-v10` and `playtest-v10` store independently checksummed/validated records, awards/themes and opt-in bounded logs. `camera-guide-seen` is independent of tutorial completion. A corrupt new component is reset alone, not the legacy profile or other components.
 - Save on menu/settings actions, activity backgrounding and approximately every 15 seconds of drawing. Only the battle model is persisted; camera position resets to a fitted board.
 - V10 writes `FL04`: all prior battle data plus original seed/known-history flags, starting-king loss, rules/AI version, factual interception/cap counters, objective configuration/progress, challenge identity/original daily date and exact RNG state.
+- V11 extends the battle format with terminal reason, mission configuration/pressure, Daily version and mode metadata. `FL04` retains its V10 rules and configuration when loaded. New profile language is stored separately; changing it cannot modify simulation or records.
+- Revised mission records extend FP10 with a new CRC-protected format version. Old arrays remain historical, earned mastery is retained, and objective completion no longer depends on campaign score/stars.
 - `FL01` (V4-compatible), `FL02` (V5 extended armies) and `FL03` (V6/V7 six-team and resignation state) still load. Old battles use classic AI and unknown seed/history; no difficulty-specific record or clean-king badge is invented. Existing over-cap V5 garrisons clamp to 100/125; already-sent packets retain their units.
 - V5 campaign completion unlocks Sector 31. Existing scores, stars, best times, preferences and sector selection remain intact. A corrupt battle is discarded without clearing the profile.
 - New saves validate size, values, owner IDs, map size, convoy limits, objective/history consistency, timers, dates and resignation state. Exact RNG persistence keeps subsequent AI/setup randomness consistent across V10 save/resume. All restored states open the menu rather than auto-running.
@@ -151,4 +160,4 @@ The PowerShell build compiles Java, generates the original WAV loop, packages re
 
 `app/` and root Gradle files contain Android. `ios/` and `backend/` are reserved, unimplemented folders in this monorepo. An iOS port can reuse assets, campaign content and specifications, but native Java does not directly compile for iOS. Future online services must be optional so offline play remains available.
 
-For gameplay details, see [V10 Rules](game-rules-v10.md), [V10 Acceptance](verification-v10.md) and [Screenshots](screenshots.md).
+For current gameplay details, see [V11 Rules](game-rules-v11.md) and [Screenshots](screenshots.md). [V10 Rules](game-rules-v10.md) and [V10 Acceptance](verification-v10.md) describe the historical baseline.

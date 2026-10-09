@@ -9,6 +9,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Typeface;
+import android.graphics.Rect;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Bundle;
@@ -23,6 +24,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.WindowInsets;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityNodeProvider;
+import android.view.accessibility.AccessibilityEvent;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -72,9 +76,9 @@ public final class MainActivity extends Activity {
         try (OutputStream output = getContentResolver().openOutputStream(data.getData())) {
             if (output == null) throw new java.io.IOException("No writable destination");
             output.write(csv.getBytes(StandardCharsets.UTF_8));
-            Toast.makeText(this,"Playtest CSV exported",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,battleView.translate("Playtest CSV exported"),Toast.LENGTH_SHORT).show();
         } catch (Exception failed) {
-            Toast.makeText(this,"Could not export CSV",Toast.LENGTH_LONG).show();
+            Toast.makeText(this,battleView.translate("Could not export CSV"),Toast.LENGTH_LONG).show();
         }
     }
 
@@ -119,6 +123,9 @@ public final class MainActivity extends Activity {
             });
             storage = context.getSharedPreferences("frontline-v1",Context.MODE_PRIVATE);
             GameScene.Profile profile = new GameScene.Profile();
+            String language = storage.getString("language",null);
+            if (language == null) language = storage.getAll().isEmpty() ? java.util.Locale.getDefault().getLanguage() : "en";
+            profile.language = language.equals("id") || language.equals("hi") ? language : "en";
             profile.unlocked = Math.max(0,Math.min(GameModel.LEVELS.length-1,storage.getInt("unlocked",0)));
             profile.difficulty = Math.max(0,Math.min(2,storage.getInt("difficulty",1)));
             profile.wins = storage.getInt("wins",0);
@@ -172,6 +179,7 @@ public final class MainActivity extends Activity {
             int availableHeight = Math.max(1,getHeight()-safeTop-safeBottom);
             scale = Math.min(getWidth()/420f,availableHeight/620f);
             offsetX = (getWidth()-420*scale)/2;
+            scene.minimumTouchSize = 48*getResources().getDisplayMetrics().density/scale;
             long now = System.nanoTime();
             if (running && previousFrame != 0) scene.update(Math.min(.06f,(now-previousFrame)/1_000_000_000f));
             previousFrame = now;
@@ -227,14 +235,14 @@ public final class MainActivity extends Activity {
             try { activity.startActivityForResult(intent,EXPORT_LOG); }
             catch (RuntimeException unavailable) {
                 activity.pendingCsv = null;
-                Toast.makeText(getContext(),"No document exporter available",Toast.LENGTH_LONG).show();
+                Toast.makeText(getContext(),translate("No document exporter available"),Toast.LENGTH_LONG).show();
             }
         }
         @Override public void unlockCodeRequested() {
             if (unlockDialog != null || scene.overlay != GameScene.SETTINGS) return;
             EditText input = new EditText(getContext());
             input.setId(android.R.id.edit);
-            input.setHint("Enter code");
+            input.setHint(translate("Enter code"));
             input.setSingleLine(true);
             input.setInputType(InputType.TYPE_CLASS_NUMBER);
             input.setImeOptions(EditorInfo.IME_ACTION_DONE);
@@ -245,7 +253,7 @@ public final class MainActivity extends Activity {
             container.setPadding(spacing,spacing/3,spacing,0);
             container.addView(input,new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,LinearLayout.LayoutParams.WRAP_CONTENT));
             TextView error = new TextView(getContext());
-            error.setText("Invalid code");
+            error.setText(translate("Invalid code"));
             error.setTextSize(14);
             error.setTextColor(GameScene.COLORS[1]);
             error.setPadding(0,spacing/3,0,0);
@@ -253,10 +261,10 @@ public final class MainActivity extends Activity {
             error.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
             container.addView(error);
             AlertDialog dialog = new AlertDialog.Builder(getContext())
-                .setTitle("Unlock Sectors")
+                .setTitle(translate("Unlock Sectors"))
                 .setView(container)
-                .setNegativeButton("Cancel",null)
-                .setPositiveButton("Unlock",null)
+                .setNegativeButton(translate("Cancel"),null)
+                .setPositiveButton(translate("Unlock"),null)
                 .create();
             Runnable submit = () -> {
                 if (!scene.redeemUnlockCode(input.getText().toString())) {
@@ -264,7 +272,7 @@ public final class MainActivity extends Activity {
                     return;
                 }
                 dialog.dismiss();
-                Toast.makeText(getContext(),"All "+GameModel.LEVELS.length+" sectors unlocked",Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(),translate("All "+GameModel.LEVELS.length+" sectors unlocked"),Toast.LENGTH_SHORT).show();
                 invalidate();
             };
             dialog.setOnShowListener(ignored -> {
@@ -299,7 +307,7 @@ public final class MainActivity extends Activity {
             edit.putInt("unlocked",profile.unlocked).putInt("difficulty",profile.difficulty).putInt("wins",profile.wins)
                 .putBoolean("sound",profile.sound).putBoolean("music",profile.music).putBoolean("haptics",profile.haptics)
                 .putBoolean("tutorial-seen",profile.tutorialSeen).putBoolean("camera-guide-seen",profile.cameraGuideSeen)
-                .putInt("selected-sector",profile.selectedSector);
+                .putInt("selected-sector",profile.selectedSector).putString("language",profile.language);
             for (int i = 0; i < profile.best.length; i++) {
                 edit.putInt("best-"+i,profile.best[i]).putInt("stars-"+i,profile.stars[i]).putFloat("time-"+i,profile.times[i]);
             }
@@ -310,7 +318,7 @@ public final class MainActivity extends Activity {
                 else edit.remove("battle");
             }
             catch (java.io.IOException failedSave) { edit.remove("battle"); }
-            edit.apply();
+            edit.commit();
         }
 
         private void color(int color) { paint.setColor(color); paint.setStyle(Paint.Style.FILL); }
@@ -335,5 +343,53 @@ public final class MainActivity extends Activity {
             paint.setTextAlign(align == 1 ? Paint.Align.CENTER : align == 2 ? Paint.Align.RIGHT : Paint.Align.LEFT);
             canvas.drawText(text,x,baseline,paint);
         }
+        @Override public float measureText(String text,float size,boolean isBold) {
+            paint.setTextSize(size); paint.setTypeface(isBold ? bold : regular);
+            return paint.measureText(text);
+        }
+        private String translate(String text) { return Localization.translate(scene.profile.language,text); }
+
+        private int accessibilityFocus = View.NO_ID;
+        private final AccessibilityNodeProvider accessibility = new AccessibilityNodeProvider() {
+            private int id(GameScene.AccessibleButton b) { return b.id.hashCode() & 0x7fffffff; }
+            @Override public AccessibilityNodeInfo createAccessibilityNodeInfo(int virtualId) {
+                if (virtualId == View.NO_ID) {
+                    AccessibilityNodeInfo host = AccessibilityNodeInfo.obtain(BattleView.this);
+                    onInitializeAccessibilityNodeInfo(host);
+                    for (GameScene.AccessibleButton b : scene.accessibleButtons()) host.addChild(BattleView.this,id(b));
+                    return host;
+                }
+                for (GameScene.AccessibleButton b : scene.accessibleButtons()) if (id(b) == virtualId) {
+                    AccessibilityNodeInfo node = AccessibilityNodeInfo.obtain();
+                    node.setSource(BattleView.this,virtualId); node.setParent(BattleView.this);
+                    node.setPackageName(getContext().getPackageName()); node.setClassName("android.widget.Button");
+                    node.setContentDescription(b.label); node.setText(b.label);
+                    node.setClickable(true); node.setFocusable(true); node.setEnabled(true); node.setVisibleToUser(isShown());
+                    Rect bounds = new Rect(Math.round(offsetX+b.x*scale),Math.round(safeTop+b.y*scale),
+                        Math.round(offsetX+(b.x+b.width)*scale),Math.round(safeTop+(b.y+b.height)*scale));
+                    node.setBoundsInParent(bounds);
+                    int[] location = new int[2]; getLocationOnScreen(location); bounds.offset(location[0],location[1]);
+                    node.setBoundsInScreen(bounds);
+                    node.addAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    node.setAccessibilityFocused(virtualId == accessibilityFocus);
+                    node.addAction(virtualId == accessibilityFocus ? AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS : AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
+                    return node;
+                }
+                return null;
+            }
+            @Override public boolean performAction(int virtualId,int action,Bundle args) {
+                for (GameScene.AccessibleButton b : scene.accessibleButtons()) if (id(b) == virtualId) {
+                    if (action == AccessibilityNodeInfo.ACTION_CLICK) { scene.activateButton(b.id); invalidate(); return true; }
+                    if (action == AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS || action == AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS) {
+                        accessibilityFocus = action == AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS ? virtualId : View.NO_ID;
+                        AccessibilityEvent event = AccessibilityEvent.obtain(action == AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS ? AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED : AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUS_CLEARED);
+                        event.setSource(BattleView.this,virtualId); event.setPackageName(getContext().getPackageName());
+                        getParent().requestSendAccessibilityEvent(BattleView.this,event); invalidate(); return true;
+                    }
+                }
+                return super.performAction(virtualId,action,args);
+            }
+        };
+        @Override public AccessibilityNodeProvider getAccessibilityNodeProvider() { return accessibility; }
     }
 }

@@ -3,4 +3,5 @@
     <application android:label="Frontline Test Harness" android:debuggable="true" android:testOnly="true" />
     <instrumentation android:name="com.frontline.offline.tests.NativeGestureTest" android:targetPackage="com.frontline.offline" />
     <instrumentation android:name="com.frontline.offline.tests.NativeV10Test" android:targetPackage="com.frontline.offline" />
+    <instrumentation android:name="com.frontline.offline.tests.NativeV11Test" android:targetPackage="com.frontline.offline" />
 </manifest>

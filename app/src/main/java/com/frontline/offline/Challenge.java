@@ -9,7 +9,8 @@ import java.util.TimeZone;
 
 public final class Challenge {
     public static final int CAMPAIGN = 0, HOLD_KING = 1, KEEP_KING = 2, BUDGET = 3;
-    public static final String DAILY_VERSION = "daily-v10-1";
+    public static final int LEGACY_CONFIG_VERSION = 1, CONFIG_VERSION = 2;
+    public static final String LEGACY_DAILY_VERSION = "daily-v10-1", DAILY_VERSION = "daily-v11-2";
     private static final long DAY_MILLIS = 86_400_000L;
 
     // Initial timers and deployment budgets are provisional; human playtesting is required.
@@ -27,9 +28,13 @@ public final class Challenge {
 
     public final String name;
     public final int sector, type, budget;
-    public final float seconds;
+    public final float seconds, legacySeconds;
 
     public Challenge(String name, int sector, int type, float seconds, int budget) {
+        this(name,sector,type,seconds,budget,seconds);
+    }
+
+    private Challenge(String name, int sector, int type, float seconds, int budget, float legacySeconds) {
         if (name == null || name.trim().isEmpty()) throw new IllegalArgumentException("Challenge name");
         if (sector < 0 || sector >= GameModel.LEVELS.length) throw new IllegalArgumentException("Challenge sector");
         if (type < HOLD_KING || type > BUDGET) throw new IllegalArgumentException("Challenge type");
@@ -38,6 +43,7 @@ public final class Challenge {
             throw new IllegalArgumentException("Challenge objective");
         this.name = name; this.sector = sector; this.type = type;
         this.seconds = seconds; this.budget = budget;
+        this.legacySeconds = legacySeconds;
     }
 
     public String objective() {
@@ -49,14 +55,31 @@ public final class Challenge {
     }
 
     public GameModel create(int difficulty, long seed, int id, String dailyDate) {
+        return createVersioned(difficulty,seed,id,dailyDate,CONFIG_VERSION);
+    }
+
+    public GameModel createLegacy(int difficulty, long seed, int id, String dailyDate) {
+        return createVersioned(difficulty,seed,id,dailyDate,LEGACY_CONFIG_VERSION);
+    }
+
+    public GameModel createVersioned(int difficulty, long seed, int id, String dailyDate, int configVersion) {
         String originalDate = dailyDate == null ? "" : dailyDate;
         if (!originalDate.isEmpty() && !validDate(originalDate)) throw new IllegalArgumentException("Daily date");
         if (id < -1 || id >= PRESETS.length || id == -1 && !originalDate.isEmpty())
             throw new IllegalArgumentException("Challenge identity");
-        GameModel model = new GameModel(sector, difficulty, seed);
+        if (configVersion != CONFIG_VERSION && configVersion != LEGACY_CONFIG_VERSION) throw new IllegalArgumentException("Mission configuration");
+        GameModel model = new GameModel(sector, difficulty, seed,
+            configVersion == LEGACY_CONFIG_VERSION ? GameModel.LEGACY_RULES_VERSION : GameModel.RULES_VERSION);
         int target = model.originalKing(type == HOLD_KING ? 1 : GameModel.PLAYER);
-        model.configureChallenge(type, target, seconds, budget);
+        model.configureChallenge(type, target, configVersion == LEGACY_CONFIG_VERSION ? legacySeconds : seconds, budget);
         model.challengeId = id; model.dailyDate = originalDate; model.aiVersion = 1;
+        model.missionConfigVersion = configVersion;
+        model.dailyVersion = originalDate.isEmpty() ? "" : configVersion == LEGACY_CONFIG_VERSION ? LEGACY_DAILY_VERSION : DAILY_VERSION;
+        if (configVersion == CONFIG_VERSION && type == KEEP_KING)
+            model.missionPressure = sector == 0 ? GameModel.DEFENCE_HOME : sector == 8 ? GameModel.DEFENCE_PROVINCE : GameModel.DEFENCE_NONE;
+        if (model.missionPressure != GameModel.DEFENCE_NONE)
+            for (GameModel.Territory territory : model.territories) if (territory.owner == GameModel.NEUTRAL)
+                territory.troops = Math.max(1,Math.floor(territory.troops*(model.missionPressure == GameModel.DEFENCE_HOME ? .4 : .15)));
         return model;
     }
 
@@ -82,9 +105,14 @@ public final class Challenge {
     }
 
     public static long dailySeed(String value) {
+        return dailySeed(value,DAILY_VERSION);
+    }
+
+    public static long dailySeed(String value, String version) {
         if (!validDate(value)) throw new IllegalArgumentException("Daily date");
+        if (!DAILY_VERSION.equals(version) && !LEGACY_DAILY_VERSION.equals(version)) throw new IllegalArgumentException("Daily version");
         // FNV-1a over the ASCII version followed by the ISO date, without a separator.
-        String input = DAILY_VERSION + value;
+        String input = version + value;
         long hash = 0xcbf29ce484222325L;
         for (int i = 0; i < input.length(); i++) {
             hash ^= input.charAt(i);
@@ -94,7 +122,11 @@ public final class Challenge {
     }
 
     public static int dailyId(String value) {
-        return (int) Math.floorMod(dailySeed(value), (long) PRESETS.length);
+        return dailyId(value,DAILY_VERSION);
+    }
+
+    public static int dailyId(String value, String version) {
+        return (int) Math.floorMod(dailySeed(value,version), (long) PRESETS.length);
     }
 
     public static long untilReset(long millis) {

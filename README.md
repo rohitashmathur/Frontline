@@ -1,14 +1,26 @@
 # Frontline
 
-An original offline Android territory-conquest game. **V10 / 0.10.0** has 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, difficulty-specific records, mastery rewards, music, practical tutorials and saved battles. No login, backend, network permission, ads or remote telemetry.
+An original offline Android territory-conquest game. **V11 / 0.11.0** has 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, difficulty-specific records, mastery rewards, music, practical tutorials and saved battles. English, Bahasa Indonesia and Hindi are bundled offline. No login, backend, network permission, ads or remote telemetry.
 
 ## Install
 
-Android 7.0 or newer is required. The versioned build is `build/FrontlineV10.apk`; the build script produces `build/Frontline-debug.apk`. See the [V10 release](https://github.com/rohitashmathur/Frontline/releases/tag/v0.10.0) for the review APK. This is a prototype debug-signed build, not a Play Store release.
+Android 7.0 or newer is required. The versioned build is `build/FrontlineV11.apk`; the build script produces `build/Frontline-debug.apk`. See the [V11 test release](https://github.com/rohitashmathur/Frontline/releases/tag/v0.11.0) for the review APK. This is a prototype debug-signed build, not a Play Store release.
 
 Install over V7, V6 or V5 to retain local progress; do not uninstall first. The package and original prototype signing key are unchanged. Historical records remain marked Legacy because their attempt difficulty is unknown. Existing overfilled V5 garrisons are clamped to the 100/125 limits, while armies already in flight retain their units.
 
-## V10 Changes
+## V11 Changes
+
+- New Classic battles start every faction with the same army. Existing saved armies are not rewritten.
+- Settings is a generously sized, accessible gear in the top-right safe area. Daily Mission sits immediately below it, with a separate touch target and completion state.
+- Settings switches English, Bahasa Indonesia and Hindi immediately without changing a battle, difficulty, Daily seed or progress. The choice persists. Existing installations default to English; new installations use a supported device language.
+- Tutorial Skip and Complete are mutually exclusive and protected against duplicate input. Corrected terminal-event semantics start with V11; historical logs are retained unchanged.
+- Missions and Daily use objective-specific completion and records: elapsed completion time for Hold King, completion-only for Home Guard, and fewest troops deployed for Troop Budget, with time only breaking budget ties. Revised missions award no campaign speed stars. V10 records remain historical.
+- The model stores a defeat reason. Budget missions show used/remaining troops and warn before an excessive deployment; friendly reinforcement counts toward the allowance. Over-budget actions still lose rather than being silently cancelled.
+- Mission configurations, Daily generation and record evaluation are versioned. Continuing an older battle keeps its configuration, timers, difficulty and date.
+
+See [V11 Rules](docs/game-rules-v11.md) and the versioned verification reports for precise scope and remaining human-playtest work.
+
+## V10 Changes (Historical)
 
 - Continue Battle is the primary action for an unfinished attempt. New Attempt opens a briefing; replacing or restarting an active battle requires confirmation. Selecting a sector does not discard it.
 - Practical capture, reinforcement, deployment and king-control tutorial steps, replay/skip, optional advanced Rules, and opening-sector tactical prompts.
@@ -20,7 +32,7 @@ Install over V7, V6 or V5 to retain local progress; do not uninstall first. The 
 - Daily missions reset at 00:00 UTC, use a date/version seed and fixed Normal difficulty, and retain their original identity across midnight and process restarts. Local daily bests retain the latest 60 dates.
 - Three measurable mastery badges and earned Signal/Blueprint visual themes. Cosmetics do not change combat rules or faction colours.
 
-Scope: A1-A6 and B1-B4 from the supplied priorities. A7 balance/human playtesting and C1-C3 remain separate. Mission timers/budgets and replay interest are not claimed to be human-validated.
+V10 scope was A1-A6 and B1-B4 from the previous priorities. Its reports are historical evidence, not verification of V11. Difficulty, language quality and replay interest are not claimed to be human-validated.
 
 ## V7 Changes
 
@@ -106,10 +118,10 @@ See [V7 Verification Results](docs/verification-v7.md) for the local APK checksu
 
 ## Prototype Limits
 
-- AI uses heuristics; factions currently share the same rules/AI rather than unique abilities.
+- AI uses heuristics. Pressure and Guardian have different targeting/reserve behaviour, but no faction-specific production bonuses.
 - Later-map balance and resignation feel still need human playtesting.
 - Troops fly directly between any two territories without terrain obstruction.
-- Canvas menus do not yet provide full TalkBack navigation.
-- Difficulty can change mid-round, so scores are personal rather than competitive rankings.
+- Menu controls expose localized accessibility labels. Full nonvisual battlefield play still needs accessibility testing.
+- Difficulty is fixed per attempt; Settings selects the next attempt's difficulty. Records are local, not competitive rankings.
 - Headless tests verify music playback state, not perceived loudness or manufacturer-specific audio/touch behavior.
 - This is a debug prototype, not a Play Store release.

@@ -90,7 +90,7 @@ final class SharedRulesTest {
         model = quiet(0); packet = new GameModel.Troop(0,1,0,1,0); packet.units = -1; model.troops.add(packet);
         reject(model.save(),"Invalid grouped troop quantity rejected");
         model = quiet(0);
-        check(java.nio.ByteBuffer.wrap(model.save()).getInt() == 0x464C3034,"V10 saves retain six teams and resignation state with objective/history metadata");
+        check(java.nio.ByteBuffer.wrap(model.save()).getInt() == 0x464C3035,"V11 saves retain six teams and resignation state with objective/history and mode metadata");
         check(Arrays.equals(model.save(),GameModel.restore(model.save()).save()),"V6 battle roundtrip remains exact");
     }
 

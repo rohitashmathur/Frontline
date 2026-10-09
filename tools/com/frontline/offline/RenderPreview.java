@@ -118,6 +118,26 @@ public final class RenderPreview implements GameScene.Graphics {
         render(scene,360,532,new File(output,"v10-confirm-small.png"));
         scene.overlay = GameScene.CAMERA_HELP;
         render(scene,360,532,new File(output,"v10-camera-guide.png"));
+        for (String language : new String[] {"en","id","hi"}) {
+            GameScene.Profile localized = new GameScene.Profile(); localized.language = language;
+            localized.tutorialSeen = true; localized.unlocked = 59;
+            GameScene translated = new GameScene(localized,null,events); translated.back();
+            for (int view : new int[] {GameScene.MENU,GameScene.SETTINGS,GameScene.CHALLENGES,GameScene.DAILY,GameScene.MASTERY,GameScene.HELP}) {
+                translated.overlay = view;
+                render(translated,360,532,new File(output,"v11-"+language+"-view-"+view+"-small.png"));
+                render(translated,420,900,new File(output,"v11-"+language+"-view-"+view+"-tall.png"));
+            }
+            translated.overlay = GameScene.MENU; press(translated,"tutorial");
+            java.lang.reflect.Field step = GameScene.class.getDeclaredField("tutorialStep"); step.setAccessible(true);
+            for (int i = 0; i < 5; i++) {
+                step.setInt(translated,i);
+                render(translated,360,532,new File(output,"v11-"+language+"-tutorial-"+(i+1)+".png"));
+            }
+            for (int level = 0; level < 60; level++) {
+                translated.start(level);
+                render(translated,360,532,new File(output,"v11-"+language+"-sector-"+(level+1)+".png"));
+            }
+        }
         System.out.println("Rendered all 60 maps, ten chapter pages/endings, five tutorial steps, and zoom/pan states at compact and tall sizes.");
     }
 
@@ -141,6 +161,10 @@ public final class RenderPreview implements GameScene.Graphics {
     }
 
     private void color(int color) { g.setColor(new Color(color,true)); }
+    public float measureText(String text,float size,boolean bold) {
+        g.setFont(new Font("SansSerif",bold ? Font.BOLD : Font.PLAIN,1).deriveFont(size));
+        return g.getFontMetrics().stringWidth(text);
+    }
     public void clip(float x,float y,float width,float height) { previousClip = g.getClip(); g.clip(new java.awt.geom.Rectangle2D.Float(x,y,width,height)); }
     public void unclip() { g.setClip(previousClip); }
     public void rect(float x,float y,float w,float h,float radius,int color) {

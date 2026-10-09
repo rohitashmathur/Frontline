@@ -37,7 +37,7 @@ public final class V10ModelTest {
         for (int level = 0; level < GameModel.LEVELS.length; level++) {
             GameModel model = new GameModel(level,1,Long.MIN_VALUE+level);
             check(model.seed == Long.MIN_VALUE+level && model.seedKnown && model.historyKnown && !model.startingKingLost
-                && model.rulesVersion == 10 && model.aiVersion == 0,"New battle metadata is known and classic by default");
+                && model.rulesVersion == GameModel.RULES_VERSION && model.aiVersion == 0,"New battle metadata is known and classic by default");
             check(model.objectiveType == 0 && model.objectiveTarget == -1 && model.objectiveProgress == 0
                 && model.objectiveSeconds == 0 && model.deploymentBudget == 0 && model.challengeId == -1 && model.dailyDate.isEmpty(),"Campaign defaults");
             Set<Integer> kings = new HashSet<>();
@@ -314,7 +314,7 @@ public final class V10ModelTest {
             GameModel model = new GameModel(level,difficulty,980+level*3+difficulty); model.aiVersion = style;
             for (int tick = 0; tick < 127; tick++) model.update(.07f);
             GameModel resumed = GameModel.restore(model.save());
-            check(Arrays.equals(model.save(),resumed.save()),"FL04 roundtrip is exact before continuing");
+            check(Arrays.equals(model.save(),resumed.save()),"FL05 roundtrip is exact before continuing");
             for (int tick = 0; tick < 240; tick++) {
                 float dt = tick%3 == 0 ? .03f : tick%3 == 1 ? .07f : .1f;
                 if (tick%31 == 0) {
@@ -331,12 +331,13 @@ public final class V10ModelTest {
         GameModel daily = Challenge.PRESETS[4].create(1,Challenge.dailySeed("2026-10-06"),4,"2026-10-06");
         advance(daily,1); GameModel resumed = GameModel.restore(daily.save());
         check(resumed.dailyDate.equals("2026-10-06") && resumed.seed == daily.seed && resumed.challengeId == 4
-            && resumed.rulesVersion == 10 && resumed.aiVersion == 1 && resumed.historyKnown,"Daily identity and original attempt state persist");
+            && resumed.rulesVersion == GameModel.RULES_VERSION && resumed.missionConfigVersion == Challenge.CONFIG_VERSION
+            && resumed.dailyVersion.equals(Challenge.DAILY_VERSION) && resumed.aiVersion == 1 && resumed.historyKnown,"Daily identity and original attempt state persist");
     }
 
     private static void legacyMigration() throws Exception {
         for (int version = 1; version <= 3; version++) for (int level : new int[] {0,5,12,29}) {
-            GameModel old = quiet(level,2,18); old.elapsed = 45; old.captures = 8; old.unitsLost = 11; old.unitsSent = 42;
+            GameModel old = quietLegacy(level,2,18); old.elapsed = 45; old.captures = 8; old.unitsLost = 11; old.unitsSent = 42;
             old.territories.get(0).troops = version == 2 ? 5000 : 98;
             packet(old,0,1,0,5,.2f,version == 1 ? 1 : 3500);
             GameModel model = GameModel.restore(legacy(old,version));
@@ -350,25 +351,25 @@ public final class V10ModelTest {
             for (int i = 0; i < model.territories.size(); i++) expected.nextInt(9);
             check(((Random)field("random").get(model)).nextDouble() == expected.nextDouble(),"Old restore keeps original classic reseeding behavior");
         }
-        GameModel old = quiet(36,1,18);
+        GameModel old = quietLegacy(36,1,18);
         GameModel model = GameModel.restore(legacy(old,3));
         check(model.level().opponents == 5 && model.originalKing(5) == old.originalKing(5),"FL03 expanded faction and king identity migrate");
-        old = quiet(0,1,18); old.territories.get(0).owner = 1;
+        old = quietLegacy(0,1,18); old.territories.get(0).owner = 1;
         model = GameModel.restore(legacy(old,3));
         check(!model.historyKnown && !model.startingKingLost,"Legacy current ownership is not fabricated past history");
     }
 
     private static void invalidStates() throws Exception {
         GameModel model = quiet(0,1,19); byte[] valid = model.save();
-        check(ByteBuffer.wrap(valid).getInt() == 0x464C3034,"New format is FL04");
+        check(ByteBuffer.wrap(valid).getInt() == 0x464C3035,"New format is FL05");
         reject(null); reject(new byte[50001]); reject(Arrays.copyOf(valid,valid.length-1)); reject(Arrays.copyOf(valid,valid.length+1));
         byte[] broken = valid.clone(); broken[0] = 0; reject(broken);
-        int metadata = valid.length-61;
+        int metadata = valid.length-89;
         for (int offset : new int[] {8,9,10}) { broken = valid.clone(); broken[metadata+offset] = 2; reject(broken); }
         for (long state : new long[] {-1,1L<<48,Long.MAX_VALUE}) {
-            broken = valid.clone(); ByteBuffer.wrap(broken).putLong(broken.length-8,state); reject(broken);
+            broken = valid.clone(); ByteBuffer.wrap(broken).putLong(broken.length-36,state); reject(broken);
         }
-        model.rulesVersion = 9; reject(model.save()); model.rulesVersion = 10;
+        model.rulesVersion = 9; reject(model.save()); model.rulesVersion = GameModel.RULES_VERSION;
         model.aiVersion = 2; reject(model.save()); model.aiVersion = 0;
         model.historyKnown = false; reject(model.save()); model.historyKnown = true;
         model.seedKnown = false; reject(model.save()); model.seedKnown = true;
@@ -393,7 +394,8 @@ public final class V10ModelTest {
         }
         model.dailyDate = null;
         try { model.save(); throw new AssertionError("Null daily date accepted"); } catch (IOException expected) { checks++; }
-        model.dailyDate = "2024-02-29"; check(GameModel.restore(model.save()).dailyDate.equals(model.dailyDate),"Strict leap-day dates remain valid");
+        model.dailyDate = "2024-02-29"; model.dailyVersion = Challenge.DAILY_VERSION;
+        check(GameModel.restore(model.save()).dailyDate.equals(model.dailyDate),"Strict leap-day dates remain valid");
         model = quiet(0,1,19); model.configureChallenge(2,-1,1,0);
         model.startingKingLost = true; reject(model.save()); model.startingKingLost = false;
         model.territories.get(0).owner = 1; reject(model.save());
@@ -515,6 +517,10 @@ public final class V10ModelTest {
     private static GameModel quiet(int level,int difficulty,long seed) throws Exception {
         GameModel model = new GameModel(level,difficulty,seed); Arrays.fill((float[])field("aiTimers").get(model),10); return model;
     }
+    private static GameModel quietLegacy(int level,int difficulty,long seed) throws Exception {
+        GameModel model = new GameModel(level,difficulty,seed,GameModel.LEGACY_RULES_VERSION);
+        Arrays.fill((float[])field("aiTimers").get(model),10); return model;
+    }
     private static GameModel dominated(int level,int difficulty) throws Exception {
         GameModel model = quiet(level,difficulty,23);
         for (GameModel.Territory tile : model.territories) { tile.owner = 0; tile.troops = GameModel.troopCap(tile); }
@@ -558,7 +564,7 @@ public final class V10ModelTest {
     }
 
     private static int classicFingerprint(int level,int difficulty) throws Exception {
-        GameModel model = new GameModel(level,difficulty,710+level);
+        GameModel model = new GameModel(level,difficulty,710+level,GameModel.LEGACY_RULES_VERSION);
         for (int tick = 0; tick < 900; tick++) {
             if (tick%37 == 0) {
                 for (GameModel.Territory source : model.territories) {
