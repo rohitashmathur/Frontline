@@ -178,7 +178,7 @@ final class V6RulesTest {
         java.lang.reflect.Field field = GameModel.class.getDeclaredField("dominanceSeconds"); field.setAccessible(true); field.setFloat(model,value);
     }
     private static void click(GameScene scene,String id) {
-        scene.render(new GameModelTest.NullGraphics(),700); float[] point = scene.buttonPosition(id);
+        scene.render(new GameModelTest.NullGraphics(),700); float[] point = UiTestControls.find(scene,id,700);
         if (point == null) throw new AssertionError("Missing V6 control: "+id);
         scene.down(point[0],point[1]); scene.up(point[0],point[1]);
     }

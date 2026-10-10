@@ -382,6 +382,11 @@ public final class MainActivity extends Activity {
                 if (virtualId == View.NO_ID) {
                     AccessibilityNodeInfo host = AccessibilityNodeInfo.obtain(BattleView.this);
                     onInitializeAccessibilityNodeInfo(host);
+                    if (scene.canScrollScreen()) {
+                        host.setScrollable(true);
+                        host.addAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+                        host.addAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
+                    }
                     for (GameScene.AccessibleButton b : scene.accessibleButtons()) host.addChild(BattleView.this,id(b));
                     return host;
                 }
@@ -404,6 +409,11 @@ public final class MainActivity extends Activity {
                 return null;
             }
             @Override public boolean performAction(int virtualId,int action,Bundle args) {
+                if (virtualId == View.NO_ID && (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD || action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) {
+                    boolean moved = scene.scrollScreen((action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD ? 1 : -1)*Math.max(80,(getHeight()-safeTop-safeBottom)/scale*.6f));
+                    if (moved) { sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SCROLLED); invalidate(); }
+                    return moved;
+                }
                 for (GameScene.AccessibleButton b : scene.accessibleButtons()) if (id(b) == virtualId) {
                     if (action == AccessibilityNodeInfo.ACTION_CLICK) { scene.activateButton(b.id); invalidate(); return true; }
                     if (action == AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS || action == AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS) {

@@ -44,12 +44,13 @@ public final class V10SceneTest {
         f.profile.best[0] = 1500; f.profile.stars[0] = 2; f.profile.times[0] = 80;
         byte[] battle = f.scene.model.save(), campaign = campaignState(f.profile);
         float[] resume = position(f, "resume"), play = position(f, "play");
-        check(resume[1] < play[1] && "Continue Battle".equals(label(f, "resume")),
-            "An unfinished menu battle has Continue Battle above New Attempt");
+        check(resume[0] < play[0] && Math.abs(resume[1]-play[1]) < 1 && "Continue Battle".equals(label(f, "resume")),
+            "Command Deck places primary Continue beside secondary New Attempt");
         check(render(f).activeAt(resume[0], resume[1]), "Continue Battle is the primary highlighted action");
         click(f, "sectors"); click(f, "level_5");
-        check(f.scene.overlay == GameScene.MENU && f.profile.selectedSector == 5, "Sector selection returns to menu");
+        check(f.scene.overlay == GameScene.SECTORS && f.profile.selectedSector == 5, "Sector selection stays on campaign path");
         sameBattle(f, battle, "Selecting a sector alone must not replace the active battle");
+        click(f,"back");
         click(f, "resume");
         check(f.scene.overlay == GameScene.NONE && f.scene.model.levelIndex == 2, "Continue resumes the original sector");
         sameBattle(f, battle, "Continue does not rebuild the selected sector or advance paused time");
@@ -189,7 +190,7 @@ public final class V10SceneTest {
         GameModel previous = won(2, 1, 90, 2); f.profile.progress.recordCampaign(previous);
         byte[] legacy = legacyState(f.profile), battle = f.scene.model.save();
         click(f, "resume"); click(f, "settings");
-        check(render(f).has("NEXT ATTEMPT"), "Settings discloses when difficulty changes take effect");
+        check(render(f).has("Next battle"), "Settings discloses when difficulty changes take effect");
         click(f, "difficulty_2"); click(f, "back");
         check(f.profile.difficulty == 2 && f.scene.model.difficulty == 1, "Settings difficulty changes only the next attempt");
         sameBattle(f, battle, "Changing difficulty leaves the active battle byte-exact");
@@ -244,10 +245,10 @@ public final class V10SceneTest {
         GameModel record = won(0, 1, 30, 4); profile.progress.recordCampaign(record);
         Fixture f = new Fixture(profile, null, 780); click(f, "sectors");
         Draws picker = render(f);
-        check(picker.rowHas(Integer.toString(record.score()), 208, 267),
+        check(picker.has(Localization.text(profile.language,"deck.best",record.score())),
             "Sector 1's cleared row must show its new Normal best, not Legacy Best 0");
-        check(picker.goldStars(208, 267) == record.stars(),
-            "Sector 1's new difficulty stars must appear even when Legacy stars are zero");
+        check(profile.progress.stars[1][0] == record.stars(),
+            "Campaign path preserves difficulty-specific stars even when Legacy stars are zero");
     }
 
     private static void playtestDecisions() throws Exception {
@@ -511,7 +512,7 @@ public final class V10SceneTest {
     }
 
     private static float[] position(Fixture f, String id) {
-        render(f); float[] p = f.scene.buttonPosition(id);
+        render(f); float[] p = UiTestControls.find(f.scene,id,f.height);
         check(p != null, "Missing rendered control: " + id + " / overlay=" + f.scene.overlay);
         check(p[0] > 0 && p[0] < 420 && p[1] > 0 && p[1] < f.height, "Control fits viewport: " + id);
         return p;

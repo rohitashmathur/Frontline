@@ -1,14 +1,25 @@
 # Frontline
 
-An original offline Android territory-conquest game. **V11 / 0.11.0** has 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, five-battle Classic runs and three experimental routed maps. It includes difficulty-specific records, mastery rewards, music, practical tutorials and saved battles. English, Bahasa Indonesia and Hindi are bundled offline. No login, backend, network permission, ads or remote telemetry.
+An original offline Android territory-conquest game. **V12 step 1 / 0.12.0** introduces the dark Command Deck, connected campaign map and full-page settings. It retains 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, five-battle Classic runs and three experimental routed maps. Difficulty-specific records, mastery rewards, music, practical tutorials and saved battles remain unchanged. English, Bahasa Indonesia and Hindi are bundled offline. No login, backend, network permission, ads or remote telemetry.
 
 ## Install
 
-Android 7.0 or newer is required. The versioned build is `build/FrontlineV11.apk`; the build script produces `build/Frontline-debug.apk`. See the [V11 test release](https://github.com/rohitashmathur/Frontline/releases/tag/v0.11.0) for the review APK. This is a prototype debug-signed build, not a Play Store release.
+Android 7.0 or newer is required. The local versioned build is `build/FrontlineV12.apk`; the build script produces `build/Frontline-debug.apk`. V12 step 1 is a code push and local testing build, not a new GitHub release. The [historical V11 test release](https://github.com/rohitashmathur/Frontline/releases/tag/v0.11.0) remains available. This is a prototype debug-signed build, not a Play Store release.
 
 Install over V7, V6 or V5 to retain local progress; do not uninstall first. The package and original prototype signing key are unchanged. Historical records remain marked Legacy because their attempt difficulty is unknown. Existing overfilled V5 garrisons are clamped to the 100/125 limits, while armies already in flight retain their units.
 
-## V11 Changes
+## V12 Step 1
+
+- Charcoal/mint Command Deck with the actual retained battle preview, coverage/time, primary Continue and secondary New Attempt. A fresh game shows its real three-star target instead of fabricated battle metrics.
+- Settings gear remains top-right, Daily immediately below. Classic Run, Missions, Frontier Lab and icon shortcuts preserve their existing flows.
+- Six connected sector nodes per chapter show selected, cleared and locked states. Selection stays on the path; its Play/Continue action is separate. All ten chapters remain browsable.
+- Full-page grouped settings: audio/haptics, next-battle difficulty, expandable language picker, Enter Code and collapsed Playtest Tools. Returning from settings preserves the originating screen.
+- Smaller screens scroll without activating the pressed control. TalkBack can scroll these screens. Visible targets remain at least 48dp on the verified native viewports.
+- The footer on Home, Campaign and Settings is `0.12.0`. Battle rules, save formats, progression and exact V7 `12345` behavior are unchanged.
+
+See [V12 Step 1 Verification](docs/verification-v12.md). Development stops after this step's commit and push; subsequent approved steps receive another release-version increment.
+
+## V11 Changes (Preserved)
 
 - New Classic battles start every faction with the same army. Existing saved armies are not rewritten.
 - Settings is a generously sized, accessible gear in the top-right safe area. Daily Mission sits immediately below it, with a separate touch target and completion state.
@@ -55,6 +66,8 @@ Settings now includes **Enter Code**. Enter exactly `12345` and select Unlock (o
 ## Documentation
 
 - [Application Architecture and Flow Diagrams](docs/architecture.md)
+- [V12 Step 1 Release](docs/release-v12.md)
+- [V12 Step 1 Verification](docs/verification-v12.md)
 - [Current V11 Rules](docs/game-rules-v11.md)
 - [V11 Phase 1 Verification](docs/verification-v11-phase1.md)
 - [V11 Balance Lab Verification](docs/verification-v11-phase2.md)
@@ -65,7 +78,7 @@ Settings now includes **Enter Code**. Enter exactly `12345` and select Unlock (o
 - [V10 Acceptance and Verification](docs/verification-v10.md)
 - [Native Android Screenshots](docs/screenshots.md)
 
-<img src="docs/screenshots/v11/menu-final-id.png" width="240" alt="V11 integrated localized menu fixture" /> <img src="docs/screenshots/v11/logistics-route-en.png" width="240" alt="V11 experimental route preview fixture" />
+<img src="docs/screenshots/v12/home.png" width="220" alt="V12 native Command Deck fixture" /> <img src="docs/screenshots/v12/campaign.png" width="220" alt="V12 native campaign path fixture" /> <img src="docs/screenshots/v12/settings.png" width="220" alt="V12 native grouped settings fixture" />
 
 ## Play
 
@@ -81,7 +94,7 @@ Use the main menu to continue, select a sector, start a new attempt, choose a mi
 | --- | --- |
 | `app/` and root Gradle files | Native Android app, campaign, portable battle rules and assets |
 | `scripts/` | Windows setup, build and Android/portable verification |
-| `tests/` | Core, legacy regression and V10/V11 feature tests |
+| `tests/` | Core, legacy regression, V10/V11 features and V12 screen tests |
 | `android-tests/` | Separate test-only native flow and multi-touch instrumentation |
 | `tools/` | Rendering adapters, deterministic test saves and original music generation |
 | `docs/` | Architecture, diagrams, versioned rules, acceptance and native screenshots |
@@ -120,9 +133,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v10.p
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v11.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v11-run.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v11-logistics.ps1 -RunDevice
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v12.ps1
 ```
 
-The current native scripts use Android 15 and only the named `emulator-5580`; test fixtures never target a physical phone. Put the actual previous `FrontlineV6.apk` in `build/` for the upgrade check. The separate test-only instrumentation APK verifies real Android touch/lifecycle flows and captures Canvas pixels at three phone/tablet sizes, then is removed. Captures go to `build/device/`; fixtures/tools are not packaged in the game APK. `device-smoke-test.ps1` is the historical V6 flow script, not the V10 acceptance runner. Stop the emulator after use.
+The current native scripts use Android 15 and only the named `emulator-5580`; test fixtures never target a physical phone. Put the actual previous `FrontlineV6.apk` in `build/` for the upgrade check. The separate test-only instrumentation APK verifies real Android touch/lifecycle flows and captures Canvas pixels, then is removed. V12 screens are checked at four display configurations, with the app retaining portrait orientation. Captures go to `build/device/`; fixtures/tools are not packaged in the game APK. `device-smoke-test.ps1` is the historical V6 flow script, not the V10 acceptance runner. Stop the emulator after use.
 
 For V7's code dialog and real V6 upgrade check, run `scripts/test-unlock-code.ps1` after starting the dedicated emulator. Keep the actual V6 APK at `build/FrontlineV6.apk`. The test uses real native input, verifies wrong/empty/cancelled codes, confirms saved data is unchanged apart from unlocks, restarts the app, and selects/plays Sector 60. It also checks the dialog on a small phone viewport.
 

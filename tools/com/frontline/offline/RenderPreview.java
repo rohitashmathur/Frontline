@@ -178,7 +178,7 @@ public final class RenderPreview implements GameScene.Graphics {
 
     private static void press(GameScene scene,String id) {
         scene.render(new GameModelTest.NullGraphics(),700);
-        float[] point = scene.buttonPosition(id);
+        float[] point = UiTestControls.find(scene,id,700);
         if (point == null) throw new IllegalStateException("Missing preview control: " + id);
         scene.down(point[0],point[1]); scene.up(point[0],point[1]);
     }

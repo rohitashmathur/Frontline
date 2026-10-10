@@ -44,7 +44,7 @@ final class V7RulesTest {
         scene.back(); click(scene,"sectors");
         for (int i = Campaign.chapterIndex(profile.selectedSector); i < Campaign.CHAPTERS.length-1; i++) click(scene,"chapter_next");
         click(scene,"level_59");
-        check(profile.selectedSector == 59 && scene.overlay == GameScene.MENU,"Sector 60 can be selected without clearing earlier sectors");
+        check(profile.selectedSector == 59 && scene.overlay == GameScene.SECTORS,"Sector 60 can be selected on the campaign path without clearing earlier sectors");
         click(scene,"play");
         click(scene,"begin_attempt"); click(scene,"confirm_replace"); click(scene,"camera_ready");
         check(scene.model.levelIndex == 59 && scene.overlay == GameScene.NONE,"The newly unlocked final sector is playable");
@@ -54,7 +54,7 @@ final class V7RulesTest {
     }
     private static void click(GameScene scene,String id) {
         scene.render(new GameModelTest.NullGraphics(),780);
-        float[] point = scene.buttonPosition(id);
+        float[] point = UiTestControls.find(scene,id,700);
         if (point == null) throw new AssertionError("Missing control: "+id);
         scene.down(point[0],point[1]); scene.up(point[0],point[1]);
     }

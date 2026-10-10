@@ -59,7 +59,7 @@ public final class NativeV11Test extends Instrumentation {
         if ("true".equals(args.getString("restore"))) mode = "restore";
         expectedLanguage = args.getString("expectedLanguage", "en");
         nextLanguage = args.getString("nextLanguage", "");
-        if (!shot.matches("[a-z0-9-]+") || !Arrays.asList("suite", "relaunch", "restore", "glyph").contains(mode)
+        if (!shot.matches("[a-z0-9-]+") || !Arrays.asList("suite", "relaunch", "restore", "glyph", "v12screens").contains(mode)
             || !supported(expectedLanguage) || !nextLanguage.isEmpty() && !supported(nextLanguage))
             throw new IllegalArgumentException("V11 harness arguments");
         start();
@@ -72,7 +72,15 @@ public final class NativeV11Test extends Instrumentation {
         Throwable failure = null;
         boolean retain = false;
         try {
-            if (mode.equals("suite")) {
+            if (mode.equals("v12screens")) {
+                require(!backup.getBoolean(MARKER,false),"interrupted fixture requires restore-only first");
+                copy(backup,storage.getAll());
+                require(backup.edit().putBoolean(MARKER,true).commit(),"original preferences backed up");
+                require(storage.edit().clear().putBoolean("tutorial-seen",true).putBoolean("camera-guide-seen",true)
+                    .putBoolean("sound",false).putBoolean("music",false).putBoolean("haptics",false)
+                    .putInt("difficulty",1).putInt("unlocked",2).putInt("best-0",1700).putInt("stars-0",2).commit(),"V12 presentation fixture installed");
+                launch(); ui(this::v12Screens);
+            } else if (mode.equals("suite")) {
                 require(!backup.getBoolean(MARKER, false), "interrupted fixture requires restore-only first");
                 copy(backup, storage.getAll());
                 require(backup.edit().putBoolean(MARKER, true).commit(), "original preferences backed up");
@@ -133,6 +141,67 @@ public final class NativeV11Test extends Instrumentation {
                 + "; fixture screenshots=" + shot + "; automated glyph/layout evidence only\n"
             : "FAIL: " + android.util.Log.getStackTraceString(failure)));
         finish(failure == null ? Activity.RESULT_OK : Activity.RESULT_CANCELED, result);
+    }
+
+    private void v12Screens() throws Exception {
+        require("0.12.0".equals(read(type("AppVersion"),"NAME")),"V12 footer matches release");
+        call(scene,"start",1); Object model = read(scene,"model");
+        call(model,"launch",0,1,.25); write(model,"elapsed",17f);
+        write(scene,"overlay",constant("GameScene","MENU"));
+        byte[] battle = bytes(model), progress = bytes(read(profile,"progress"));
+        for (String language : LANGUAGES) {
+            write(profile,"language",language); call(view,"changed");
+            call(scene,"scrollScreen",-10000f); homeBounds();
+            capture(language,"v12-home","drawMenu"); auditV12Pages();
+            tap("settings"); capture(language,"v12-settings","drawSettings"); auditV12Pages();
+            require(optionalButton("export_log") == null,"Playtest tools initially collapsed");
+            tap("music"); require((boolean)read(profile,"music"),"native Music on");
+            tap("music"); require(!(boolean)read(profile,"music"),"native Music off");
+            tap("difficulty_2"); require((int)read(profile,"difficulty") == 2 && (int)read(model,"difficulty") == 1,"difficulty changes only next battle");
+            tap("tools"); tap("playtest_log"); require((boolean)read(read(profile,"log"),"enabled"),"playtest tools remain reachable");
+            tap("playtest_log"); tap("tools");
+            tap("language_picker"); tap("language_"+language); require(language.equals(read(profile,"language")),"native picker persists chosen language");
+            require(language.equals(storage.getString("language","")),"language saved to native preferences");
+            tap("back"); tap("sectors"); capture(language,"v12-campaign","drawSectors"); auditV12Pages();
+            require(reveal("level_2") != null,"unlocked sector is reachable");
+            require(optionalButton("level_3") == null,"locked sector has no virtual action");
+            tap("settings"); tap("back"); require((int)read(scene,"overlay") == constant("GameScene","SECTORS"),"Settings returns to campaign");
+            tap("back"); require((int)read(scene,"overlay") == constant("GameScene","MENU"),"campaign Back returns home after settings");
+            tap("sectors"); tap("level_2"); require((int)read(scene,"overlay") == constant("GameScene","SECTORS"),"selection remains on campaign path");
+            tap("play"); tap("brief_back"); require((int)read(scene,"overlay") == constant("GameScene","SECTORS"),"briefing Back retains campaign");
+            tap("back"); tap("resume"); require((int)read(scene,"overlay") == constant("GameScene","NONE"),"Home continues actual retained round");
+            same(battle,bytes(model),"native presentation preserves exact battle"); same(progress,bytes(read(profile,"progress")),"native presentation preserves records");
+            call(scene,"pause"); tap("settings"); tap("back"); require((int)read(scene,"overlay") == constant("GameScene","PAUSE"),"settings returns to pause");
+            tap("menu"); write(profile,"selectedSector",1); write(profile,"difficulty",1);
+            call(scene,"scrollScreen",-10000f); render().recycle();
+            Object primary = reveal("resume"); float px = (float)read(primary,"x")+(float)read(primary,"width")/2;
+            float py = (float)read(primary,"y")+(float)read(primary,"height")/2;
+            touch(MotionEvent.ACTION_DOWN,new float[] {px,py}); touch(MotionEvent.ACTION_MOVE,new float[] {px,py-90});
+            render().recycle(); touch(MotionEvent.ACTION_UP,new float[] {px,py-90});
+            require((int)read(scene,"overlay") == constant("GameScene","MENU"),"native swipe cancels touched button");
+            same(battle,bytes(model),"native scrolling cannot send troops");
+        }
+        tap("settings"); require((boolean)call(scene,"redeemUnlockCode","12345"),"V7 unlock retained");
+        tap("back"); tap("sectors");
+        for (int chapter = 0; chapter < 10; chapter++) {
+            write(scene,"sectorPage",chapter); write(profile,"selectedSector",chapter*6+5);
+            render().recycle(); require(reveal("level_"+(chapter*6+5)) != null,"all sixty nodes reachable"); auditV12Pages();
+        }
+        same(battle,bytes(model),"all campaign browsing preserves retained battle");
+    }
+    private void auditV12Pages() throws Exception {
+        call(scene,"scrollScreen",-10000f);
+        for (int page = 0; page < 50; page++) {
+            render().recycle(); checkLabels();
+            String method = (int)read(scene,"overlay") == constant("GameScene","MENU") ? "drawMenu"
+                : (int)read(scene,"overlay") == constant("GameScene","SETTINGS") ? "drawSettings" : "drawSectors";
+            require(joined(textLayout(method)).contains("0.12.0"),"version footer remains visible when scrolling");
+            List<?> controls = buttons(); float density = view.getResources().getDisplayMetrics().density;
+            for (Object b : controls) { Rect r = bounds(b); require(r.width()+1 >= 48*density && r.height()+1 >= 48*density,"native controls at least 48dp"); }
+            for (int i = 0; i < controls.size(); i++) for (int j = i+1; j < controls.size(); j++)
+                require(!Rect.intersects(bounds(controls.get(i)),bounds(controls.get(j))),"native hit targets do not overlap");
+            if (!(boolean)call(scene,"scrollScreen",45f)) break;
+        }
     }
 
     private void freshInstallLanguage() throws Exception {
@@ -484,17 +553,21 @@ public final class NativeV11Test extends Instrumentation {
     private List<TextLine> textLayout(String drawMethod) throws Exception {
         List<TextLine> lines = new ArrayList<>();
         int[] clipped = {0};
+        List<RectF> clips = new ArrayList<>();
+        boolean commandScreen = "drawMenu".equals(drawMethod) || "drawSectors".equals(drawMethod) || "drawSettings".equals(drawMethod);
         Object graphics = Proxy.newProxyInstance(activity.getClassLoader(), new Class<?>[] {type("GameScene$Graphics")}, (proxy, method, args) -> {
             if (method.getName().equals("measureText")) return call(view, "measureText", args);
-            if (method.getName().equals("clip")) clipped[0]++;
-            if (method.getName().equals("unclip")) clipped[0]--;
-            if (method.getName().equals("text") && clipped[0] == 0 && !((String)args[0]).isEmpty()) {
+            if (method.getName().equals("clip")) { clipped[0]++; clips.add(new RectF((float)args[0],(float)args[1],(float)args[0]+(float)args[2],(float)args[1]+(float)args[3])); }
+            if (method.getName().equals("unclip")) { clipped[0]--; clips.remove(clips.size()-1); }
+            if (method.getName().equals("text") && (clipped[0] == 0 || commandScreen) && !((String)args[0]).isEmpty()) {
                 String text = (String)args[0]; float x = (float)args[1], baseline = (float)args[2];
                 float width = (float)call(view, "measureText", text, args[3], args[5]);
                 Paint paint = (Paint)read(view, "paint"); Rect ink = new Rect();
                 paint.getTextBounds(text, 0, text.length(), ink);
                 int align = (int)args[6]; float left = x - (align == 1 ? width / 2 : align == 2 ? width : 0);
-                lines.add(new TextLine(text, new RectF(left + ink.left, baseline + ink.top, left + ink.right, baseline + ink.bottom)));
+                RectF bounds = new RectF(left + ink.left, baseline + ink.top, left + ink.right, baseline + ink.bottom);
+                if (clipped[0] > 0 && !clips.get(clips.size()-1).contains(bounds)) return null;
+                lines.add(new TextLine(text,bounds));
             }
             return null;
         });
@@ -588,11 +661,11 @@ public final class NativeV11Test extends Instrumentation {
     }
 
     private void activate(String id) throws Exception {
-        button(id);
+        reveal(id);
         require(provider().performAction(virtualId(id), AccessibilityNodeInfo.ACTION_CLICK, null), "native accessible activation " + id);
     }
     private void tap(String id) throws Exception {
-        render().recycle(); Object b = button(id);
+        Object b = reveal(id);
         float[] point = {(float)read(b, "x") + (float)read(b, "width") / 2, (float)read(b, "y") + (float)read(b, "height") / 2};
         touch(MotionEvent.ACTION_DOWN, point); touch(MotionEvent.ACTION_UP, point);
     }
@@ -602,6 +675,19 @@ public final class NativeV11Test extends Instrumentation {
         require(x >= 0 && y >= 0 && x < view.getWidth() && y < view.getHeight(), "native touch stays in viewport");
         long now = SystemClock.uptimeMillis(); MotionEvent event = MotionEvent.obtain(now, now, action, x, y, 0);
         try { require(view.dispatchTouchEvent(event), "native view consumes touch"); } finally { event.recycle(); }
+    }
+    private Object reveal(String id) throws Exception {
+        Object b = visible(id); if (b != null) return b;
+        String section = id.startsWith("language_") ? "language_picker"
+            : id.equals("playtest_log") || id.equals("export_log") || id.equals("clear_log") ? "tools" : null;
+        if (section != null) { Object header = visible(section); if (header != null) call(scene,"activateButton",section); }
+        b = visible(id); require(b != null,"scroll-reachable native control "+id); return b;
+    }
+    private Object visible(String id) throws Exception {
+        render().recycle(); Object b = optionalButton(id); if (b != null) return b;
+        call(scene,"scrollScreen",-10000f);
+        for (int step = 0; step < 50; step++) { render().recycle(); b = optionalButton(id); if (b != null) return b; if (!(boolean)call(scene,"scrollScreen",40f)) break; }
+        return null;
     }
     private Bitmap render() { Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888); view.draw(new Canvas(bitmap)); return bitmap; }
     private void savePng(Bitmap bitmap, String name) throws Exception {

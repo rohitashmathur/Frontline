@@ -643,7 +643,7 @@ public final class V11RunSceneTest {
     }
 
     private static void click(Fixture f, String id) {
-        render(f); float[] position = f.scene.buttonPosition(id);
+        render(f); float[] position = UiTestControls.find(f.scene,id,f.height);
         check(position != null, "Missing rendered control " + id + " / overlay=" + f.scene.overlay);
         check(position[0] >= 0 && position[0] <= 420 && position[1] >= 0 && position[1] <= f.height,
             "Control is within viewport: " + id);

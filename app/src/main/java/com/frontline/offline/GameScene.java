@@ -69,8 +69,13 @@ public final class GameScene {
     public boolean hasBattle;
     public double fraction = 1;
     private final Events events;
+    private final CommandScreens commandScreens;
     private final ArrayList<Button> buttons = new ArrayList<>();
+    private final CommandScreens.Controls screenControls = (id,label,x,y,w,h) -> buttons.add(new Button(id,label,x,y,w,h));
     private int previousOverlay = NONE, selected = -1, sectorPage;
+    private int settingsReturn = MENU, previewReturn = MENU;
+    private boolean screenDrag, screenScrolling;
+    private float screenDownY;
     private boolean resultRecorded, tutorialStartsBattle, practiceDragging, practiceDone;
     private boolean tutorialTerminal;
     public float minimumTouchSize = 64;
@@ -151,6 +156,7 @@ public final class GameScene {
 
     public GameScene(Profile profile, GameModel restored, Events events) {
         this.profile = profile; this.events = events;
+        commandScreens = new CommandScreens(profile);
         model = restored == null ? new GameModel(0, profile.difficulty, System.nanoTime()) : restored;
         hasBattle = restored != null;
         resultRecorded = restored != null && restored.outcome != GameModel.PLAYING;
@@ -243,6 +249,7 @@ public final class GameScene {
         if (overlay == SPLASH) { drawSplash(g); return; }
         if (overlay == TUTORIAL) { drawTutorial(g); return; }
         if (overlay == SECTORS) { drawSectors(g); return; }
+        if (overlay == SETTINGS) { drawSettings(g); return; }
         if (overlay == BRIEFING) { drawBriefing(g); return; }
         if (overlay == CHALLENGES) { drawChallenges(g); return; }
         if (overlay == DAILY) { drawDaily(g); return; }
@@ -256,12 +263,8 @@ public final class GameScene {
         if (overlay == LOGISTICS || overlay == LOGISTICS_RESULT) {
             drawLogistics(g); return;
         }
-        if (overlay == MENU || overlay == SETTINGS && previousOverlay == MENU) {
+        if (overlay == MENU) {
             drawMenu(g);
-            if (overlay == MENU) return;
-            buttons.clear();
-            g.rect(0, 0, 420, height, 0, 0xE617191B);
-            drawSettings(g);
             return;
         }
         g.text("FRONTLINE", 22, 47, 27, WHITE, true, 0);
@@ -500,39 +503,7 @@ public final class GameScene {
     }
 
     private void drawMenu(Graphics g) {
-        float target = Math.max(64,minimumTouchSize);
-        buttons.add(new Button("settings","Settings",398-target,14,target,target));
-        addGear(g,398-target/2,14+target/2);
-        float dailyY = 22+target;
-        boolean done = profile.progress.dailyCompleted(Challenge.date(events.now()),1,Challenge.DAILY_VERSION,GameModel.RULES_VERSION,Challenge.CONFIG_VERSION);
-        buttons.add(new Button("daily","Daily Mission",218,dailyY,180,target));
-        g.rect(218,dailyY,180,target,4,PANEL);
-        g.rect(231,dailyY+target/2-11,18,20,2,done ? COLORS[0] : COLORS[2]);
-        g.line(233,dailyY+target/2-4,247,dailyY+target/2-4,2,BACKGROUND);
-        paragraph(g,"Daily Mission",320,dailyY+target/2-4,132,14,WHITE,true,1);
-        g.text(done ? "Completed" : "Available",320,dailyY+target/2+23,10,MUTED,false,1);
-        g.text("FRONTLINE",22,57,27,WHITE,true,0);
-        emblem(g,64,114,66);
-        float top = Math.max(184,dailyY+target+20);
-        g.text(Campaign.chapter(profile.selectedSector).name,22,top,15,COLORS[Campaign.chapter(profile.selectedSector).rulerFaction],true,0);
-        g.text(tr("home.sector",profile.selectedSector+1,Localization.translate(profile.language,GameModel.LEVELS[profile.selectedSector].name)),22,top+25,12,MUTED,false,0);
-        float row = top+45;
-        boolean unfinished = activeBattle();
-        button(g,unfinished ? "resume" : "play",unfinished ? "Continue Battle" : "New Attempt",22,row,376,48,true,true);
-        if (unfinished) {
-            button(g,"play","New Attempt",22,row+56,182,44,false,true);
-            button(g,"sectors","Select Sector",216,row+56,182,44,false,true);
-        } else button(g,"sectors","Select Sector",22,row+56,376,44,false,true);
-        button(g,"challenges","Challenges",22,row+108,182,44,false,true);
-        button(g,"mastery","Mastery",216,row+108,182,44,false,true);
-        button(g,"tutorial","How to Play",22,row+160,182,44,false,true);
-        button(g,"help","Rules",216,row+160,182,44,false,true);
-        button(g,"run",tr("run.title"),22,row+212,182,44,false,true);
-        button(g,"logistics",tr("logistics.title"),216,row+212,182,44,false,true);
-        int cleared = 0;
-        for (int i = 0; i < profile.best.length; i++) if (profile.cleared(i)) cleared++;
-        g.text(cleared + " / "+GameModel.LEVELS.length+" CLEARED", 52, height-40, 11, MUTED, true, 0);
-        g.text("BEST TOTAL  " + profile.totalScore(), 368, height-40, 11, COLORS[0], true, 2);
+        commandScreens.home(g,screenControls,model,activeBattle(),events.now(),height,minimumTouchSize);
     }
 
     private void addGear(Graphics g,float x,float y) {
@@ -663,53 +634,7 @@ public final class GameScene {
     }
 
     private void drawSectors(Graphics g) {
-        Campaign.Chapter chapter = Campaign.CHAPTERS[sectorPage];
-        int accent = COLORS[chapter.rulerFaction];
-        g.text("CAMPAIGN",22,43,11,accent,true,0);
-        g.text("BEST TOTAL  "+profile.totalScore(),398,43,11,MUTED,true,2);
-        g.text(String.format(java.util.Locale.US,"CHAPTER %02d / %02d",sectorPage+1,Campaign.CHAPTERS.length),22,77,11,MUTED,true,0);
-        g.text(chapter.name,22,109,27,WHITE,true,0);
-        if (chapter.rulerFaction == 0) {
-            g.text(sectorPage < 5 ? "VOSS / SOL / VEIL" : "FIVE RIVAL RULERS",22,139,11,accent,true,0);
-            int count = sectorPage < 5 ? 3 : 5;
-            for (int faction = 1; faction <= count; faction++) factionEmblem(g,398-(count-faction)*27-13,103,24,faction);
-        } else {
-            g.text(Campaign.RULERS[chapter.rulerFaction]+" / "+Campaign.FACTIONS[chapter.rulerFaction],22,139,11,accent,true,0);
-            factionEmblem(g,367,100,50,chapter.rulerFaction);
-        }
-        g.text(chapter.firstLine,22,166,12,WHITE,false,0);
-        g.text(chapter.secondLine,22,186,12,MUTED,false,0);
-        int first = sectorPage*Campaign.SECTORS_PER_CHAPTER;
-        int end = Math.min(first+Campaign.SECTORS_PER_CHAPTER,GameModel.LEVELS.length);
-        float rowHeight = Math.min(61,(height-352)/Campaign.SECTORS_PER_CHAPTER);
-        for (int i = first; i < end; i++) {
-            float row = 208+(i-first)*rowHeight;
-            boolean locked = i > profile.unlocked;
-            boolean cleared = profile.cleared(i);
-            if (i == profile.selectedSector && !locked) g.rect(20,row,380,rowHeight-2,6,0xFF303E39);
-            if (!locked) buttons.add(new Button("level_"+i,GameModel.LEVELS[i].name,20,row,380,rowHeight-2));
-            g.text(String.format(java.util.Locale.US,"%02d",i+1),24,row+23,16,locked ? MUTED : COLORS[0],true,0);
-            g.text(GameModel.LEVELS[i].name,64,row+19,15,locked ? MUTED : WHITE,true,0);
-            int record = profile.progress.campaignBest(i,profile.difficulty,GameModel.RULES_VERSION);
-            String recordLabel = record > 0 ? GameModel.DIFFICULTIES[profile.difficulty]+" "+record+" / "+time(profile.progress.campaignTime(i,profile.difficulty,GameModel.RULES_VERSION)) : "No "+GameModel.DIFFICULTIES[profile.difficulty]+" record";
-            int oldRecord = profile.progress.campaignBest(i,profile.difficulty,10);
-            if (oldRecord > 0) recordLabel += " / Historical "+oldRecord;
-            if (profile.best[i] > 0) recordLabel += " / Legacy "+profile.best[i];
-            g.text(locked ? "Locked - clear Sector " + String.format(java.util.Locale.US, "%02d", i) :
-                cleared ? "Cleared / "+recordLabel : i == profile.selectedSector ? "Selected / "+recordLabel : "Unlocked / "+recordLabel,
-                64,row+36,10,MUTED,false,0);
-            if (locked) {
-                g.circle(366,row+15,6,MUTED); g.circle(366,row+15,3,BACKGROUND);
-                g.rect(358,row+15,16,12,2,MUTED); g.circle(366,row+20,1.5f,BACKGROUND);
-            } else for (int s = 0; s < 3; s++) star(g,331+s*17,row+20,5.5f,s < profile.progress.stars[profile.difficulty][i] ? COLORS[2] : BORDER);
-            g.line(22,row+rowHeight-1,398,row+rowHeight-1,1,BORDER);
-        }
-        pageArrow(g,"chapter_prev","Previous Chapter",22,height-132,false,sectorPage > 0);
-        pageArrow(g,"chapter_next","Next Chapter",342,height-132,true,sectorPage < Campaign.CHAPTERS.length-1);
-        int cleared = 0;
-        for (int i = first; i < end; i++) if (profile.cleared(i)) cleared++;
-        g.text(cleared+" / "+(end-first)+" CLEARED",210,height-104,11,MUTED,true,1);
-        button(g,"back","Back",52,height-74,316,48,false,true);
+        commandScreens.campaign(g,screenControls,model,activeBattle(),sectorPage,height,minimumTouchSize);
     }
 
     private void pageArrow(Graphics g, String id, String label, float x, float y, boolean right, boolean enabled) {
@@ -751,31 +676,7 @@ public final class GameScene {
     }
 
     private void drawSettings(Graphics g) {
-        float y = modal(g, 598);
-        g.text("Settings",52,y+38,27,WHITE,true,0);
-        g.text("Language / Bahasa / \u092d\u093e\u0937\u093e",52,y+65,12,MUTED,true,0);
-        String[] languages = {"English","Bahasa Indonesia","\u0939\u093f\u0928\u094d\u0926\u0940"};
-        String[] ids = {"en","id","hi"};
-        for (int i = 0; i < 3; i++) button(g,"language_"+ids[i],languages[i],52+i*108,y+77,100,45,profile.language.equals(ids[i]),false);
-        toggle(g,"music","Music",y+133,profile.music);
-        toggle(g,"sound","Sound Effects",y+183,profile.sound);
-        toggle(g,"haptics","Vibration",y+233,profile.haptics);
-        g.text("Difficulty",52,y+308,14,WHITE,true,0);
-        g.text("NEXT ATTEMPT",368,y+308,10,MUTED,true,2);
-        for (int i = 0; i < 3; i++) button(g,"difficulty_"+i,GameModel.DIFFICULTIES[i],52+i*108,y+323,100,38,profile.difficulty == i,false);
-        button(g,"unlock_code","Enter Code",52,y+373,316,44,false,true);
-        toggle(g,"playtest_log","Local Playtest Log",y+426,profile.log.enabled);
-        button(g,"export_log","Export CSV",52,y+482,152,38,false,true);
-        button(g,"clear_log","Clear Log",216,y+482,152,38,false,true);
-        button(g,"back","Back",52,y+536,316,44,false,true);
-    }
-
-    private void toggle(Graphics g, String id, String name, float y, boolean enabled) {
-        buttons.add(new Button(id, name, 52, y, 316, 47));
-        paragraph(g,name,52,y+23,238,14,WHITE,false,0);
-        g.rect(308, y+9, 56, 28, 14, enabled ? COLORS[0] : BORDER);
-        g.circle(enabled ? 350 : 322, y+23, 10, enabled ? BACKGROUND : MUTED);
-        g.line(52, y+48, 368, y+48, 1, BORDER);
+        commandScreens.settings(g,screenControls,height,minimumTouchSize);
     }
 
     private void drawResult(Graphics g) {
@@ -880,6 +781,8 @@ public final class GameScene {
     public void down(float x, float y) {
         pressed = null; selected = -1;
         practiceDragging = false; panning = false;
+        screenDrag = managedScreen() && commandScreens.inContent(y);
+        screenScrolling = false; screenDownY = y; pointerX = x; pointerY = y;
         for (Button button : buttons) if (button.contains(x,y)) { pressed = button; return; }
         if (overlay == TUTORIAL && (tutorialStep == 1 && !practiceDone || tutorialStep == 2) && Math.hypot(x-110,y-tutorialY()) <= 66) {
             practiceDragging = true; pointerX = x; pointerY = y; return;
@@ -1075,11 +978,16 @@ public final class GameScene {
     }
 
     public void move(float x, float y) {
+        if (screenDrag && (screenScrolling || Math.abs(y-screenDownY) > 8)) {
+            screenScrolling = true; pressed = null; commandScreens.scroll(pointerY-y);
+        }
         if (panning) { panX += x-pointerX; panY += y-pointerY; layoutBoard(); }
         pointerX = x; pointerY = y;
     }
 
     public void up(float x, float y) {
+        if (screenScrolling) { cancel(); return; }
+        screenDrag = false;
         if (pressed != null) {
             Button button = pressed; pressed = null;
             if (button.contains(x,y)) command(button.id);
@@ -1099,17 +1007,22 @@ public final class GameScene {
         selected = -1; practiceDragging = false; panning = false;
     }
 
-    public void cancel() { selected = -1; pressed = null; practiceDragging = false; panning = false; }
+    public void cancel() { selected = -1; pressed = null; practiceDragging = false; panning = false; screenDrag = screenScrolling = false; }
+    private boolean managedScreen() { return overlay == MENU || overlay == SECTORS || overlay == SETTINGS; }
+    public boolean canScrollScreen() { return managedScreen() && commandScreens.scrollable(); }
+    public boolean scrollScreen(float delta) { if (!managedScreen() || !Float.isFinite(delta)) return false; cancel(); return commandScreens.scroll(delta); }
     public String pressedLabel() { return pressed == null ? null : Localization.translate(profile.language,pressed.label); }
 
     public void back() {
         cancel();
         if (overlay == NONE) pause();
         else if (overlay == PAUSE) { overlay = NONE; log("resume","back"); }
-        else if (overlay == SETTINGS || overlay == SECTORS) overlay = previousOverlay;
+        else if (overlay == SETTINGS && commandScreens.languages) commandScreens.languages = false;
+        else if (overlay == SETTINGS) overlay = settingsReturn;
+        else if (overlay == SECTORS) overlay = previousOverlay;
         else if (overlay == CONFIRM) cancelReplacement();
         else if (overlay == HELP) overlay = helpReturn;
-        else if (overlay == BRIEFING) overlay = previewMode == 0 ? MENU : previewMode == 1 ? CHALLENGES : DAILY;
+        else if (overlay == BRIEFING) overlay = previewMode == 0 ? previewReturn : previewMode == 1 ? CHALLENGES : DAILY;
         else if (overlay == CHALLENGES || overlay == DAILY || overlay == MASTERY
             || overlay == RUN_HOME || overlay == RUN_COUNCIL || overlay == RUN_SUMMARY || overlay == LOGISTICS || overlay == LOGISTICS_RESULT) overlay = MENU;
         else if (overlay == CAMERA_HELP) overlay = PAUSE;
@@ -1161,7 +1074,7 @@ public final class GameScene {
             hasBattle = false; openRun();
         },"run_abandon");
         else if (id.equals("play")) {
-            previewMode = 0; previewSector = profile.selectedSector; overlay = BRIEFING;
+            previewMode = 0; previewSector = profile.selectedSector; previewReturn = overlay; overlay = BRIEFING;
         }
         else if (id.equals("begin_attempt")) requestReplacement(this::beginPreview,"new_attempt");
         else if (id.equals("confirm_replace") && overlay == CONFIRM && confirmedAction != null) {
@@ -1171,7 +1084,7 @@ public final class GameScene {
         }
         else if (id.equals("cancel_replace")) cancelReplacement();
         else if (id.equals("brief_back")) back();
-        else if (id.equals("challenges")) overlay = CHALLENGES;
+        else if (id.equals("challenges") || id.equals("missions")) overlay = CHALLENGES;
         else if (id.equals("daily")) overlay = DAILY;
         else if (id.equals("mastery")) overlay = MASTERY;
         else if (id.equals("help")) { helpReturn = overlay; overlay = HELP; }
@@ -1214,10 +1127,14 @@ public final class GameScene {
             log("next_sector",""); previewMode = 0; previewSector = Math.min(GameModel.LEVELS.length-1,model.levelIndex+1);
             profile.selectedSector = previewSector; overlay = BRIEFING;
         }
-        else if (id.equals("settings") || id.equals("sectors")) {
-            previousOverlay = overlay; overlay = id.equals("settings") ? SETTINGS : SECTORS;
-            if (overlay == SECTORS) sectorPage = Campaign.chapterIndex(profile.selectedSector);
-        } else if (id.equals("back")) overlay = previousOverlay;
+        else if (id.equals("settings")) {
+            settingsReturn = overlay; commandScreens.languages = false; commandScreens.tools = false;
+            commandScreens.reset(SETTINGS); overlay = SETTINGS;
+        } else if (id.equals("sectors")) {
+            previousOverlay = overlay; sectorPage = Campaign.chapterIndex(profile.selectedSector); overlay = SECTORS;
+        } else if (id.equals("back")) back();
+        else if (id.equals("language_picker")) { commandScreens.languages = !commandScreens.languages; buttons.clear(); }
+        else if (id.equals("tools")) { commandScreens.tools = !commandScreens.tools; buttons.clear(); }
         else if (id.equals("chapter_prev")) sectorPage = Math.max(0,sectorPage-1);
         else if (id.equals("chapter_next")) sectorPage = Math.min(Campaign.CHAPTERS.length-1,sectorPage+1);
         else if (id.equals("quarter")) fraction = .25;
@@ -1236,10 +1153,12 @@ public final class GameScene {
         else if (id.startsWith("language_") && overlay == SETTINGS) {
             String language = id.substring(9);
             if (language.equals("en") || language.equals("id") || language.equals("hi")) profile.language = language;
+            commandScreens.languages = false;
+            buttons.clear();
         }
         else if (id.startsWith("level_")) {
             int level = Integer.parseInt(id.substring(6));
-            if (level <= profile.unlocked) { profile.selectedSector = level; overlay = MENU; }
+            if (overlay == SECTORS && level >= 0 && level < GameModel.LEVELS.length && level <= profile.unlocked) { profile.selectedSector = level; buttons.clear(); }
         } else if (id.startsWith("difficulty_")) {
             profile.difficulty = Integer.parseInt(id.substring(11));
         }
@@ -1362,8 +1281,7 @@ public final class GameScene {
 
     float[] sectorPosition(int sector) {
         if (sector < 0 || sector >= GameModel.LEVELS.length || Campaign.chapterIndex(sector) != sectorPage) return null;
-        float rowHeight = Math.min(61,(height-352)/Campaign.SECTORS_PER_CHAPTER);
-        return new float[] {210,208+(sector%Campaign.SECTORS_PER_CHAPTER)*rowHeight+(rowHeight-2)/2};
+        return commandScreens.sectorPosition(sector);
     }
 
     public float[] position(int id) { GameModel.Territory territory = model.territories.get(id); return new float[] {cx(territory),cy(territory)}; }

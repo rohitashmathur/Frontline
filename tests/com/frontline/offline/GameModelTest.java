@@ -164,10 +164,10 @@ public final class GameModelTest {
         profile.unlocked = 2; profile.best[0] = 100; profile.stars[0] = 2;
         scene.overlay = GameScene.MENU; click(scene,"sectors");
         TextGraphics labels = new TextGraphics(); scene.render(labels,700);
-        check(labels.text.contains("Cleared / No Normal record / Legacy 100"),"Completed historical sectors explicitly show Cleared and Legacy");
-        check(labels.text.contains("Locked - clear Sector 03"),"Locked sectors explain their unlock requirement");
+        check(labels.text.contains("Cleared / Legacy 100"),"Completed historical sectors explicitly show Cleared and Legacy");
+        check(labels.text.contains("Locked"),"Locked sectors visibly identify their state");
         click(scene,"level_2");
-        check(profile.selectedSector == 2 && scene.overlay == GameScene.MENU,"Selecting sector updates menu selection");
+        check(profile.selectedSector == 2 && scene.overlay == GameScene.SECTORS,"Selecting sector updates campaign selection without leaving its path");
         check(Arrays.equals(before,scene.model.save()),"Selecting a sector alone does not discard saved battle");
         click(scene,"play");
         click(scene,"begin_attempt"); click(scene,"confirm_replace");
@@ -214,7 +214,7 @@ public final class GameModelTest {
 
     private static void click(GameScene scene, String id) {
         scene.render(new NullGraphics(),700);
-        float[] point = scene.buttonPosition(id);
+        float[] point = UiTestControls.find(scene,id,700);
         if (point == null) throw new AssertionError("Missing control: " + id);
         scene.down(point[0],point[1]); scene.up(point[0],point[1]);
     }

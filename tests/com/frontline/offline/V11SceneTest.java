@@ -20,7 +20,7 @@ public final class V11SceneTest {
     }
     private static void press(GameScene scene,String id) {
         scene.render(GRAPHICS,700);
-        float[] p = scene.buttonPosition(id);
+        float[] p = UiTestControls.find(scene,id,700);
         check(p != null,"Missing control "+id+" on "+scene.overlay);
         scene.down(p[0],p[1]); scene.up(p[0],p[1]);
     }

@@ -44,6 +44,7 @@ public final class Localization {
         tutorialAndRules();
         content();
         laterModes();
+        commandDeck();
         for (Map.Entry<String, String> entry : CATALOGS.get("en").entrySet()) {
             String key = entry.getKey(), english = entry.getValue();
             if (FIELDS.get(key).isEmpty()) {
@@ -506,6 +507,40 @@ public final class Localization {
 
     private static void content() {
         for (String[] row : LocalizationContent.ROWS) add(row[0], row[1], row[2], row[3]);
+    }
+
+    private static void commandDeck() {
+        add("deck.lab", "Frontier Lab", "Lab Perbatasan", "सीमांत प्रयोगशाला");
+        add("deck.chapter", "Chapter {chapter} of {total}", "Bab {chapter} dari {total}", "अध्याय {chapter} / {total}");
+        add("deck.sector", "Sector {sector} of {total}", "Sektor {sector} dari {total}", "सेक्टर {sector} / {total}");
+        add("deck.run_battle", "Battle {battle} of 5", "Pertempuran {battle} dari 5", "लड़ाई {battle} / 5");
+        add("deck.in_progress", "Battle in progress", "Pertempuran berlangsung", "लड़ाई जारी है");
+        add("deck.ready", "Ready to play", "Siap bermain", "खेलने के लिए तैयार");
+        add("deck.coverage", "Coverage {value}%", "Penguasaan {value}%", "नियंत्रण {value}%");
+        add("deck.modes", "Game modes", "Mode permainan", "खेल के मोड");
+        add("deck.five_battles", "5 battles", "5 pertempuran", "5 लड़ाइयाँ");
+        add("deck.objectives", "Three objective types", "Tiga jenis tujuan", "तीन प्रकार के लक्ष्य");
+        add("deck.routed_maps", "{count} routed maps", "{count} peta rute", "{count} मार्ग वाले नक्शे");
+        add("deck.more", "More", "Lainnya", "और");
+        add("deck.cleared", "{count} / {total} cleared", "{count} / {total} selesai", "{count} / {total} पूरे");
+        add("deck.best", "Cleared / best {score}", "Selesai / terbaik {score}", "पूरा / सर्वश्रेष्ठ {score}");
+        add("deck.legacy", "Cleared / Legacy {score}", "Selesai / Lama {score}", "पूरा / पुराना {score}");
+        add("deck.historical", "Cleared / Historical {score}", "Selesai / Historis {score}", "पूरा / ऐतिहासिक {score}");
+        add("deck.continue_sector", "Continue sector {sector}", "Lanjutkan sektor {sector}", "सेक्टर {sector} जारी रखें");
+        add("deck.play_sector", "Play sector {sector}", "Mainkan sektor {sector}", "सेक्टर {sector} खेलें");
+        add("deck.choose_sector", "Select an unlocked sector", "Pilih sektor yang terbuka", "खुला सेक्टर चुनें");
+        add("deck.audio", "Audio & Feel", "Audio & Getaran", "ऑडियो और स्पर्श");
+        add("deck.gameplay", "Gameplay", "Permainan", "गेमप्ले");
+        add("deck.next_battle", "Next battle", "Pertempuran berikutnya", "अगली लड़ाई");
+        add("deck.language", "Language", "Bahasa", "भाषा");
+        add("deck.extras", "Extras", "Tambahan", "अतिरिक्त");
+        add("deck.tools", "Playtest Tools", "Alat Uji Main", "खेल परीक्षण उपकरण");
+        add("deck.toggle", "{label} / {state}", "{label} / {state}", "{label} / {state}");
+        add("deck.on", "On", "Aktif", "चालू");
+        add("deck.off", "Off", "Nonaktif", "बंद");
+        add("deck.play", "Play", "Main", "खेलें");
+        add("deck.classic_run", "Classic Run", "Rangkaian Klasik", "पारंपरिक शृंखला");
+        add("deck.star_target", "3-star target {time}", "Target 3 bintang {time}", "3 सितारों का लक्ष्य {time}");
     }
 
     private static void laterModes() {

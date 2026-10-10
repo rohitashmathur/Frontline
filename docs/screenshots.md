@@ -1,5 +1,13 @@
 # Native Screenshots
 
+## V12 Step 1
+
+Actual final `0.12.0` Android Canvas captures, not the design mockups. The deterministic fixture stages a retained round and legacy clear to inspect the Home, connected campaign path and grouped settings. Automated checks cover English, Indonesian and Hindi at four display configurations; these are not evidence of physical-phone usability or organically won battles.
+
+<img src="screenshots/v12/home.png" width="220" alt="V12 dark Command Deck fixture" /> <img src="screenshots/v12/campaign.png" width="220" alt="V12 connected chapter path fixture" /> <img src="screenshots/v12/settings.png" width="220" alt="V12 grouped full-page settings fixture" />
+
+See [V12 verification](verification-v12.md). Full localized captures and native text-bound reports remain under ignored `build/device/v12-native/`.
+
 ## V11
 
 Actual Android 15 Canvas fixtures in English, Indonesian and Hindi, verified at small-phone, tall-phone and tablet sizes. Outcomes and connected ownership are staged acceptance fixtures, not human gameplay or organically won battles. The V10/V6 galleries below are historical.

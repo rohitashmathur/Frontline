@@ -1,6 +1,6 @@
-# Frontline Architecture (V11)
+# Frontline Architecture (V12 Step 1)
 
-Frontline 0.11.0 is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in.
+Frontline 0.12.0 is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in. V12 step 1 changes presentation/navigation only; V11 battle rules, records and binary saves remain in force.
 
 ## Components
 
@@ -9,6 +9,7 @@ flowchart LR
     Activity[MainActivity / Android lifecycle]
     View[BattleView / Canvas and touch adapter]
     Scene[GameScene / screens, gestures, camera and HUD]
+    Command[CommandScreens / dark deck, chapter path, settings and scroll]
     Model[GameModel / battle simulation and AI]
     Campaign[Campaign / factions and chapter story]
     Profile[Profile / scores, unlocks and settings]
@@ -30,6 +31,8 @@ flowchart LR
 
     Activity --> View
     View --> Scene
+    Scene --> Command
+    Command --> Profile
     Scene --> Model
     Scene --> Campaign
     Scene --> Profile
@@ -61,6 +64,7 @@ flowchart LR
 | --- | --- | --- |
 | Android adapter | Lifecycle, safe-area layout, Canvas, one/two-finger input, audio/haptics, storage, native code dialog and manual document export | `app/src/main/java/com/frontline/offline/MainActivity.java` |
 | Scene controller | Protected attempt flow, practical tutorial, campaign/missions/daily/mastery/help screens, results, camera and event-based HUD | `GameScene.java` |
+| Command surfaces | Dark Home, connected campaign path, full-page settings, safe clipped scrolling and version footer; no simulation mutation | `CommandScreens.java`, `AppVersion.java` |
 | Rules | Generation/caps, dispatch/interception/arrivals, objective counters, AI styles, resignation, history/events and exact binary saves | `GameModel.java` |
 | Challenge catalogue | Nine validated objective presets, configurable objectives, deterministic UTC date/version seeds and reset countdown | `Challenge.java` |
 | New progress | Difficulty-specific campaign/challenge records, bounded daily bests, mastery progress/awards and cosmetic selection | `Progress.java` |
@@ -83,7 +87,10 @@ flowchart TD
     Load --> Splash[Logo splash]
     Splash --> Menu[Main menu]
     Menu --> Select[Chapter and sector selection]
-    Select --> Menu
+    Select -->|Back| Menu
+    Select -->|Play selected sector| Brief
+    Select -->|Continue selected retained battle| Battle
+    Select --> Settings
     Menu --> Settings[Settings]
     Menu --> RunHome[New / Continue Run]
     RunHome --> RunStart[Create associated frozen Classic battle]
@@ -103,7 +110,7 @@ flowchart TD
     Transit -->|No| Fight[Combat there and stop this packet]
     LogisticsBattle --> LogisticsResult[Separate factual result / logistics records only]
     LogisticsResult --> LogisticsHome
-    Settings --> Menu
+    Settings -->|Back to originating screen| PreviousScreen[Home, campaign, pause or battlefield]
     Menu --> How[How to Play / five interactive steps]
     How --> Menu
     Menu --> Play[New Attempt / campaign, challenge or daily]
@@ -139,7 +146,7 @@ flowchart TD
     Save -->|Activity resumed| Previous[Resume previous screen; battle stays paused]
 ```
 
-The tutorial's practice state cannot modify a retained battle. Screens outside the battlefield freeze simulation. Camera gestures cancel troop drags and do not change troop ownership, counts, elapsed time or scoring. Settings difficulty is next-attempt only. Selection is independent of an active attempt; confirmation is required only for actual replacement. Cancel restores the previous paused screen/model, not a newly generated map.
+The tutorial's practice state cannot modify a retained battle. Screens outside the battlefield freeze simulation. Camera gestures cancel troop drags and do not change troop ownership, counts, elapsed time or scoring. Settings difficulty is next-attempt only. Selection is independent of an active attempt; confirmation is required only for actual replacement. Cancel restores the previous paused screen/model, not a newly generated map. V12 keeps campaign selection on the connected path. Settings has a separate return context, so visiting it from Campaign cannot replace Campaign's own Back destination. Content scroll drags cancel button activation, visible hit targets are kept outside the fixed headers/footer, and the Android accessibility host exposes forward/backward scroll actions.
 
 ## Simulation Flow
 
@@ -188,7 +195,7 @@ Collision tests use relative motion over the tick, not a single rendered positio
 
 The PowerShell build compiles Java, generates the original WAV loop, packages resources, produces DEX, aligns and signs the APK, then verifies the signature. Test tools and fixtures are not included in the APK. `.toolchain/`, generated `build/`, signing keys and credentials are ignored by Git.
 
-`android-tests/` is a separate, test-only instrumentation package. It exercises real Android multi-pointer events against the production BattleView and captures native Canvas pixels at three viewport sizes. Its APK is never part of the game's distribution.
+`android-tests/` is a separate, test-only instrumentation package. It exercises real Android multi-pointer events against the production BattleView and captures native Canvas pixels. V12 checks its three redesigned screens at four display configurations in all three languages. Its APK is never part of the game's distribution.
 
 `app/` and root Gradle files contain Android. `ios/` and `backend/` are reserved, unimplemented folders in this monorepo. An iOS port can reuse assets, campaign content and specifications, but native Java does not directly compile for iOS. Future online services must be optional so offline play remains available.
 
