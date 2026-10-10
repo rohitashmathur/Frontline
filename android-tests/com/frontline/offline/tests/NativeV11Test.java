@@ -144,7 +144,7 @@ public final class NativeV11Test extends Instrumentation {
     }
 
     private void v12Screens() throws Exception {
-        require("0.12.0".equals(read(type("AppVersion"),"NAME")),"V12 footer matches release");
+        require("0.12.1".equals(read(type("AppVersion"),"NAME")),"V12.1 footer matches release");
         call(scene,"start",1); Object model = read(scene,"model");
         call(model,"launch",0,1,.25); write(model,"elapsed",17f);
         write(scene,"overlay",constant("GameScene","MENU"));
@@ -195,7 +195,7 @@ public final class NativeV11Test extends Instrumentation {
             render().recycle(); checkLabels();
             String method = (int)read(scene,"overlay") == constant("GameScene","MENU") ? "drawMenu"
                 : (int)read(scene,"overlay") == constant("GameScene","SETTINGS") ? "drawSettings" : "drawSectors";
-            require(joined(textLayout(method)).contains("0.12.0"),"version footer remains visible when scrolling");
+            require(joined(textLayout(method)).contains((String)read(type("AppVersion"),"NAME")),"version footer remains visible when scrolling");
             List<?> controls = buttons(); float density = view.getResources().getDisplayMetrics().density;
             for (Object b : controls) { Rect r = bounds(b); require(r.width()+1 >= 48*density && r.height()+1 >= 48*density,"native controls at least 48dp"); }
             for (int i = 0; i < controls.size(); i++) for (int j = i+1; j < controls.size(); j++)

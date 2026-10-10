@@ -1,6 +1,7 @@
 package com.frontline.offline;
 
 import java.util.ArrayList;
+import java.util.UUID;
 
 public final class GameScene {
     public interface Graphics {
@@ -18,6 +19,7 @@ public final class GameScene {
         void cue(int kind);
         default void unlockCodeRequested() {}
         default void exportPlaytestRequested() {}
+        default void battleFeedbackRequested(String attemptId) {}
         default long now() { return System.currentTimeMillis(); }
     }
     public static final class Profile {
@@ -32,6 +34,9 @@ public final class GameScene {
         public PlaytestLog log = new PlaytestLog();
         public RunState run, lastRun;
         public LogisticsRecords logisticsRecords = new LogisticsRecords();
+        public String attemptId = "";
+        public boolean firstLaunchObserved, feedbackPrompted;
+        public int battleFeedback = -1;
         public int totalScore() {
             int sum = 0;
             for (int i = 0; i < best.length; i++) {
@@ -165,6 +170,12 @@ public final class GameScene {
             else if (profile.run.matchesActiveBattle(restored)) resultRecorded = false;
             else if (restored.outcome == GameModel.PLAYING) hasBattle = false;
         }
+        if (hasBattle) {
+            if (!validAttemptId(profile.attemptId)) resetAttemptTracking();
+            // Old battles may already have dispatched troops before tracking existed.
+            if (model.unitsSent > 0) profile.firstLaunchObserved = true;
+            if (profile.battleFeedback < -1 || profile.battleFeedback > 2) profile.battleFeedback = -1;
+        }
         profile.reconcileProgress();
     }
 
@@ -180,7 +191,7 @@ public final class GameScene {
         kingBanner = Math.max(0,kingBanner-Math.max(0,dt));
         if (resultDelay > 0) {
             resultDelay = Math.max(0,resultDelay-Math.max(0,dt));
-            if (resultDelay == 0) overlay = RESULT;
+            if (resultDelay == 0) { overlay = RESULT; requestBattleFeedback(); }
             return;
         }
         int oldCaptures = model.captures;
@@ -203,16 +214,25 @@ public final class GameScene {
             if (model.battleMode == GameModel.MODE_RUN) {
                 if (profile.run != null && profile.run.matchesActiveBattle(model)) {
                     profile.run = profile.run.finishBattle(model);
+                    logRun("node_end",profile.run,"association="+model.runId+";node="+model.runNode
+                        +";outcome="+model.outcome+";terminal_reason="+model.terminalReason);
+                    if (profile.run.status == RunState.COUNCIL) {
+                        logRun("council_offer",profile.run,"nonce="+profile.run.councilNonce
+                            +";offer="+java.util.Arrays.toString(profile.run.councilOffer()));
+                    }
+                    if (profile.run.terminal()) logRunEnd(profile.run);
                     if (profile.run.terminal()) profile.lastRun = profile.run;
                 }
                 log("attempt_result",model.outcome == GameModel.WON ? "won" : "lost");
                 openRun(); events.cue(model.outcome == GameModel.WON ? 2 : 3);
+                requestBattleFeedback();
                 events.changed(); return;
             }
             if (model.battleMode == GameModel.MODE_LOGISTICS) {
                 improvedTime = profile.logisticsRecords.record(model,model.logisticsConfigVersion);
                 log("attempt_result",model.outcome == GameModel.WON ? "won" : "lost");
                 overlay = LOGISTICS_RESULT; events.cue(model.outcome == GameModel.WON ? 2 : 3);
+                requestBattleFeedback();
                 events.changed(); return;
             }
             if (model.outcome == GameModel.WON) {
@@ -237,6 +257,7 @@ public final class GameScene {
             log("attempt_result",model.outcome == GameModel.WON ? "won" : "lost");
             if (model.outcome == GameModel.WON && kingBanner > 0) resultDelay = 2.4f;
             else overlay = RESULT;
+            requestBattleFeedback();
             events.cue(model.outcome == GameModel.WON ? 2 : 3);
             events.changed();
         }
@@ -832,7 +853,60 @@ public final class GameScene {
         if (model.battleMode == GameModel.MODE_LOGISTICS) return tr("logistics.map."+Logistics.getIndex(model));
         return model.dailyDate.isEmpty() ? model.objectiveType == 0 ? "Sector "+(model.levelIndex+1) : "Challenge / Sector "+(model.levelIndex+1) : "Daily "+model.dailyDate;
     }
-    private void log(String event,String detail) { profile.log.add(events.now(),event,hasBattle ? model : null,detail); }
+    private void log(String event,String detail) {
+        profile.log.add(events.now(),event,hasBattle ? model : null,detail,hasBattle ? profile.attemptId : "");
+    }
+    private void logRun(String event,RunState run,String detail) {
+        boolean matchingBattle = hasBattle && model.battleMode == GameModel.MODE_RUN
+            && model.runId.startsWith(run.id+"/");
+        String context = "run_id="+run.id+";run_seed="+run.seed+";revision="+run.revision
+            +";status="+run.status+";run_node="+run.node+";perks="+run.perks
+            +";rules_version="+run.rulesVersion+";ai_version="+run.aiVersion
+            +";content_version="+run.contentVersion+";perk_version="+run.perkVersion;
+        profile.log.add(events.now(),event,matchingBattle ? model : null,
+            context+(detail.isEmpty() ? "" : ";"+detail),matchingBattle ? profile.attemptId : "");
+    }
+    private void logRunEnd(RunState run) {
+        RunState.Summary summary = run.summary();
+        logRun("run_end",run,"battles_cleared="+summary.battlesCleared+";battles_played="+summary.battlesPlayed
+            +";retries_used="+summary.retriesUsed+";elapsed_seconds="+summary.elapsed);
+    }
+    private void logRunAbandon(RunState run,String reason) {
+        logRun("run_abandon",run,"reason="+reason);
+        logRunEnd(run);
+    }
+    private static boolean validAttemptId(String id) {
+        if (id == null || id.length() != 36) return false;
+        try { return UUID.fromString(id).toString().equals(id); }
+        catch (IllegalArgumentException invalid) { return false; }
+    }
+    private void resetAttemptTracking() {
+        profile.attemptId = UUID.randomUUID().toString();
+        profile.firstLaunchObserved = profile.feedbackPrompted = false;
+        profile.battleFeedback = -1;
+    }
+    private boolean feedbackAttemptMatches(String attemptId) {
+        return profile.log.enabled && hasBattle && model.outcome != GameModel.PLAYING
+            && validAttemptId(profile.attemptId) && profile.attemptId.equals(attemptId) && profile.battleFeedback == -1;
+    }
+    public boolean canPromptBattleFeedback(String attemptId) {
+        boolean resultVisible = overlay == RESULT || overlay == LOGISTICS_RESULT
+            || model.battleMode == GameModel.MODE_RUN && (overlay == RUN_COUNCIL || overlay == RUN_SUMMARY || overlay == RUN_HOME);
+        return resultVisible && feedbackAttemptMatches(attemptId) && !profile.feedbackPrompted;
+    }
+    public boolean markBattleFeedbackPrompted(String attemptId) {
+        if (!canPromptBattleFeedback(attemptId)) return false;
+        profile.feedbackPrompted = true; events.changed(); return true;
+    }
+    public boolean submitBattleFeedback(String attemptId,int choice) {
+        if (choice < 0 || choice > 2 || !profile.feedbackPrompted || !feedbackAttemptMatches(attemptId)) return false;
+        profile.battleFeedback = choice;
+        log("battle_feedback","rating="+new String[] {"too_easy","about_right","too_hard"}[choice]);
+        events.changed(); return true;
+    }
+    private void requestBattleFeedback() {
+        if (canPromptBattleFeedback(profile.attemptId)) events.battleFeedbackRequested(profile.attemptId);
+    }
     private static int feedbackPriority(int type) {
         return type == GameModel.HOME_KING_LOSS_EVENT ? 6 : type == GameModel.KING_GAIN_EVENT || type == GameModel.KING_LOSS_EVENT ? 5 : type == GameModel.ROUTE_INTERRUPTED_EVENT || type == GameModel.CAP_LOSS_EVENT ? 4 : type == GameModel.INTERCEPT_EVENT ? 3 : 1;
     }
@@ -1000,8 +1074,20 @@ public final class GameScene {
         } else if (selected >= 0 && overlay == NONE) {
             int target = territoryAt(x,y);
             if (target >= 0 && model.territories.get(selected).owner == GameModel.PLAYER) {
-                if (model.battleMode == GameModel.MODE_LOGISTICS && target != selected && model.route(selected,target,0) == null) routeRefusalTimer = 2.5f;
-                if (model.launch(selected,target,fraction) > 0) events.cue(0);
+                if (model.battleMode == GameModel.MODE_LOGISTICS && target != selected && model.route(selected,target,0) == null) {
+                    routeRefusalTimer = 2.5f;
+                    log("routing_refusal","reason=no_friendly_path;source="+selected+";target="+target);
+                    events.changed();
+                }
+                int sent = model.launch(selected,target,fraction);
+                if (sent > 0) {
+                    if (!profile.firstLaunchObserved) {
+                        profile.firstLaunchObserved = true;
+                        log("first_launch","active_seconds="+model.elapsed+";source="+selected+";target="+target+";troops="+sent);
+                        events.changed();
+                    }
+                    events.cue(0);
+                }
             }
         }
         selected = -1; practiceDragging = false; panning = false;
@@ -1031,13 +1117,14 @@ public final class GameScene {
             if (tutorialStep > 0) { tutorialStep--; log("tutorial_step","step="+(tutorialStep+1)); }
             else { tutorialStartsBattle = false; overlay = MENU; }
         }
-        events.changed();
+        requestBattleFeedback(); events.changed();
     }
 
     public void pause() { cancel(); if (overlay == NONE) { overlay = PAUSE; log("pause",""); } }
 
     private void command(String id) {
         int before = overlay;
+        if (before == MENU) log("home_tap","target="+id);
         events.cue(0);
         if (id.equals("pause")) pause();
         else if (id.equals("resume")) { overlay = NONE; log("resume",""); }
@@ -1051,14 +1138,22 @@ public final class GameScene {
         else if (id.equals("continue_logistics") && activeBattle() && model.battleMode == GameModel.MODE_LOGISTICS) overlay = NONE;
         else if (id.equals("logistics_retry")) requestReplacement(this::restartAttempt,"restart");
         else if (id.equals("new_run")) requestReplacement(() -> {
-            profile.run = RunState.newRun(System.nanoTime()); hasBattle = false; openRun();
+            profile.run = RunState.newRun(System.nanoTime()); hasBattle = false;
+            logRun("run_start",profile.run,""); openRun();
         },"new_run");
         else if (id.equals("begin_run_battle") && profile.run != null && profile.run.status == RunState.READY) {
             profile.run = profile.run.beginBattle(); installAttempt(profile.run.createBattle());
         }
         else if (id.equals("continue_run") && profile.run != null && profile.run.matchesActiveBattle(model) && hasBattle) overlay = NONE;
         else if (id.startsWith("perk_") && overlay == RUN_COUNCIL && profile.run != null) {
-            try { profile.run = profile.run.choosePerk(renderedCouncilNonce,Integer.parseInt(id.substring(5))); openRun(); }
+            try {
+                int perk = Integer.parseInt(id.substring(5));
+                RunState beforeChoice = profile.run;
+                profile.run = profile.run.choosePerk(renderedCouncilNonce,perk);
+                if (profile.run != beforeChoice) logRun("perk_pick",profile.run,"nonce="+renderedCouncilNonce
+                    +";council_node="+beforeChoice.node+";perk="+perk);
+                openRun();
+            }
             catch (IllegalArgumentException | IllegalStateException stale) { /* The visible offer was superseded. */ }
         }
         else if (id.equals("run_retry") && profile.run != null && profile.run.status == RunState.RETRY_AVAILABLE) {
@@ -1067,10 +1162,12 @@ public final class GameScene {
             installAttempt(profile.run.createBattle());
         }
         else if (id.equals("run_end") && profile.run != null && profile.run.status == RunState.RETRY_AVAILABLE) {
-            profile.run = profile.run.abandon(true,profile.run.revision); profile.lastRun = profile.run; openRun();
+            profile.run = profile.run.abandon(true,profile.run.revision); profile.lastRun = profile.run;
+            logRunAbandon(profile.run,"declined_retry"); openRun();
         }
         else if (id.equals("run_abandon") && unfinishedRun()) requestReplacement(() -> {
             profile.run = profile.run.abandon(true,profile.run.revision); profile.lastRun = profile.run;
+            logRunAbandon(profile.run,"user_confirmed");
             hasBattle = false; openRun();
         },"run_abandon");
         else if (id.equals("play")) {
@@ -1152,7 +1249,10 @@ public final class GameScene {
         else if (id.equals("clear_log")) profile.log.clear();
         else if (id.startsWith("language_") && overlay == SETTINGS) {
             String language = id.substring(9);
-            if (language.equals("en") || language.equals("id") || language.equals("hi")) profile.language = language;
+            if ((language.equals("en") || language.equals("id") || language.equals("hi")) && !language.equals(profile.language)) {
+                String oldLanguage = profile.language; profile.language = language;
+                log("language_change","from="+oldLanguage+";to="+language);
+            }
             commandScreens.languages = false;
             buttons.clear();
         }
@@ -1163,6 +1263,7 @@ public final class GameScene {
             profile.difficulty = Integer.parseInt(id.substring(11));
         }
         if (before != overlay) buttons.clear();
+        requestBattleFeedback();
         events.changed();
     }
 
@@ -1180,10 +1281,15 @@ public final class GameScene {
 
     private void installAttempt(GameModel next) {
         model = next; model.aiVersion = 1; hasBattle = true;
+        resetAttemptTracking();
         resultRecorded = false; improvedTime = improvedScore = false;
         kingBanner = resultDelay = feedbackTimer = 0; feedbackType = feedbackUnits = 0;
         routeRefusalTimer = 0;
         zoom = 1; panX = panY = 0; overlay = NONE; cancel(); log("attempt_start","");
+        if (model.battleMode == GameModel.MODE_RUN && profile.run != null && profile.run.matchesActiveBattle(model)) {
+            RunState.BattleAssociation battle = profile.run.activeBattle;
+            logRun("node_start",profile.run,"association="+battle.association+";node="+battle.node+";attempt="+battle.attempt);
+        }
     }
 
     private void requestReplacement(Runnable action,String reason) {
@@ -1197,6 +1303,7 @@ public final class GameScene {
                 || profile.run.revision != protectedRun.revision)) { openRun(); return; }
             if (protectedRun != null && !reason.equals("run_abandon") && !reason.equals("run_restart")) {
                 profile.lastRun = protectedRun.abandon(true,protectedRun.revision); profile.run = null;
+                logRunAbandon(profile.lastRun,reason);
                 hasBattle = false;
             }
             action.run();

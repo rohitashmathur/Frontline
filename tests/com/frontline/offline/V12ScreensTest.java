@@ -59,7 +59,7 @@ public final class V12ScreensTest {
             GameScene s = new GameScene(p,m,EVENTS); s.back(); byte[] before = m.save();
             press(s,"resume",780); check(s.overlay == GameScene.NONE && Arrays.equals(before,m.save()),"Command Deck resumes each actual battle mode");
         }
-        check(AppVersion.NAME.equals("0.12.0") && AppVersion.CODE == 12,"V12 step-one release number");
+        check(AppVersion.NAME.equals("0.12.1") && AppVersion.CODE == 13,"V12.1 release number");
         System.out.println("PASS: "+checks+" V12 screen checks.");
     }
     private static void auditPages(GameScene s,float height) {

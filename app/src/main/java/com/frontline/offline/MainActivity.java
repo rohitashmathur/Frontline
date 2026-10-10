@@ -93,6 +93,32 @@ public final class MainActivity extends Activity {
         private final ToneGenerator audio;
         private final BackgroundMusic music;
         private AlertDialog unlockDialog;
+        private AlertDialog feedbackDialog;
+        private String pendingFeedbackAttemptId;
+        private final Runnable showBattleFeedback = new Runnable() {
+            @Override public void run() {
+                if (!running || pendingFeedbackAttemptId == null || feedbackDialog != null) return;
+                final String attemptId = pendingFeedbackAttemptId;
+                if (!scene.canPromptBattleFeedback(attemptId)) { pendingFeedbackAttemptId = null; return; }
+                String language = scene.profile.language;
+                AlertDialog dialog = new AlertDialog.Builder(getContext())
+                    .setTitle(Localization.text(language,"playtest.feedback_title"))
+                    .setItems(new String[] {
+                        Localization.text(language,"playtest.too_easy"),
+                        Localization.text(language,"playtest.about_right"),
+                        Localization.text(language,"playtest.too_hard")
+                    },(ignored,choice) -> { scene.submitBattleFeedback(attemptId,choice); invalidate(); })
+                    .setNegativeButton(Localization.text(language,"playtest.not_now"),null)
+                    .create();
+                dialog.setOnDismissListener(ignored -> {
+                    if (feedbackDialog == dialog) feedbackDialog = null;
+                    if (attemptId.equals(pendingFeedbackAttemptId)) pendingFeedbackAttemptId = null;
+                });
+                feedbackDialog = dialog;
+                dialog.show();
+                if (!scene.markBattleFeedbackPrompted(attemptId)) dialog.dismiss();
+            }
+        };
         private Canvas canvas;
         private float scale = 1, offsetX;
         private int safeTop, safeBottom;
@@ -168,6 +194,12 @@ public final class MainActivity extends Activity {
                 String saved = storage.getString("battle",null);
                 if (saved != null) restored = GameModel.restore(Base64.decode(saved,Base64.DEFAULT));
             } catch (Exception invalidSave) { storage.edit().remove("battle").apply(); }
+            if (restored != null) {
+                profile.attemptId = storage.getString("battle-attempt-id-v12","");
+                profile.firstLaunchObserved = storage.getBoolean("battle-first-launch-v12",false);
+                profile.feedbackPrompted = storage.getBoolean("battle-feedback-prompted-v12",false);
+                profile.battleFeedback = storage.getInt("battle-feedback-v12",-1);
+            }
             scene = new GameScene(profile,restored,this);
             setContentDescription(Localization.translate(profile.language,"Frontline battlefield"));
             ToneGenerator generator;
@@ -182,9 +214,11 @@ public final class MainActivity extends Activity {
             if (audio != null) audio.stopTone();
             music.pause();
         }
-        void resume() { running = true; previousFrame = 0; music.resume(); invalidate(); }
+        void resume() { running = true; previousFrame = 0; music.resume(); handler.post(showBattleFeedback); invalidate(); }
         void dispose() {
             if (unlockDialog != null) unlockDialog.dismiss();
+            if (feedbackDialog != null) feedbackDialog.dismiss();
+            pendingFeedbackAttemptId = null; handler.removeCallbacks(showBattleFeedback);
             handler.removeCallbacks(tooltip); music.dispose(); if (audio != null) audio.release();
         }
 
@@ -258,6 +292,11 @@ public final class MainActivity extends Activity {
                 activity.pendingCsv = null;
                 Toast.makeText(getContext(),translate("No document exporter available"),Toast.LENGTH_LONG).show();
             }
+        }
+        @Override public void battleFeedbackRequested(String attemptId) {
+            if (feedbackDialog != null || attemptId.equals(pendingFeedbackAttemptId)) return;
+            pendingFeedbackAttemptId = attemptId;
+            handler.removeCallbacks(showBattleFeedback); handler.post(showBattleFeedback);
         }
         @Override public void unlockCodeRequested() {
             if (unlockDialog != null || scene.overlay != GameScene.SETTINGS) return;
@@ -340,8 +379,16 @@ public final class MainActivity extends Activity {
                 if (profile.lastRun != null) edit.putString("last-run-v11",Base64.encodeToString(profile.lastRun.save(),Base64.NO_WRAP));
                 else edit.remove("last-run-v11");
                 edit.putString("logistics-records-v11",Base64.encodeToString(profile.logisticsRecords.save(),Base64.NO_WRAP));
-                if (scene.hasBattle) edit.putString("battle",Base64.encodeToString(scene.model.save(),Base64.NO_WRAP));
-                else edit.remove("battle");
+                if (scene.hasBattle) {
+                    edit.putString("battle",Base64.encodeToString(scene.model.save(),Base64.NO_WRAP))
+                        .putString("battle-attempt-id-v12",profile.attemptId)
+                        .putBoolean("battle-first-launch-v12",profile.firstLaunchObserved)
+                        .putBoolean("battle-feedback-prompted-v12",profile.feedbackPrompted)
+                        .putInt("battle-feedback-v12",profile.battleFeedback);
+                } else {
+                    edit.remove("battle").remove("battle-attempt-id-v12").remove("battle-first-launch-v12")
+                        .remove("battle-feedback-prompted-v12").remove("battle-feedback-v12");
+                }
             }
             catch (java.io.IOException failedSave) { edit.remove("battle"); }
             edit.commit();

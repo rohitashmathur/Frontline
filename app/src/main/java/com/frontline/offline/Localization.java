@@ -45,6 +45,7 @@ public final class Localization {
         content();
         laterModes();
         commandDeck();
+        playtestFeedback();
         for (Map.Entry<String, String> entry : CATALOGS.get("en").entrySet()) {
             String key = entry.getKey(), english = entry.getValue();
             if (FIELDS.get(key).isEmpty()) {
@@ -507,6 +508,14 @@ public final class Localization {
 
     private static void content() {
         for (String[] row : LocalizationContent.ROWS) add(row[0], row[1], row[2], row[3]);
+    }
+
+    private static void playtestFeedback() {
+        add("playtest.feedback_title", "Battle feedback", "Penilaian pertempuran", "लड़ाई पर राय");
+        add("playtest.too_easy", "Too easy", "Terlalu mudah", "बहुत आसान");
+        add("playtest.about_right", "About right", "Pas", "ठीक लगा");
+        add("playtest.too_hard", "Too hard", "Terlalu sulit", "बहुत कठिन");
+        add("playtest.not_now", "Not now", "Nanti", "अभी नहीं");
     }
 
     private static void commandDeck() {

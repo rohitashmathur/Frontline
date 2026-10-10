@@ -30,6 +30,14 @@ public final class PlaytestLog {
         String runId = "";
     }
 
+    /** New event context stays in detail so historical saves and CSV columns remain unchanged. */
+    public void add(long wallMillis, String event, GameModel model, String detail, String attemptId) {
+        if (!enabled) return;
+        String context = "build="+AppVersion.NAME+";build_code="+AppVersion.CODE
+            +";attempt_id="+(attemptId == null ? "" : bounded(attemptId,128));
+        add(wallMillis,event,model,context+(detail == null || detail.isEmpty() ? "" : ";"+detail));
+    }
+
     public void add(long wallMillis, String event, GameModel model, String detail) {
         if (!enabled || wallMillis < 0 || event == null || event.isEmpty()) return;
         Entry entry = new Entry();
