@@ -159,7 +159,7 @@ public final class V12PlaytestTest {
         press(s,"confirm_replace"); s.activateButton("confirm_replace");
         check(count(s,"run_abandon") == 1 && count(s,"run_end") == 2,"Confirmed mode replacement logs abandonment once");
     }
-    private static void routing() {
+    private static void routing() throws Exception {
         GameScene s = scene(true,new Events()); press(s,"logistics"); press(s,"logistics_map_0");
         int source = s.model.originalKing(0), unreachable = -1;
         for (GameModel.Territory t : s.model.territories)

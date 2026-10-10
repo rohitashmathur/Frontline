@@ -1,5 +1,7 @@
 # V12 Step 1 / 0.12.0
 
+Historical release snapshot. Current code-only changes are documented in [Step 2 / 0.12.2](release-v12-step2.md); the verification and APK described below apply only to 0.12.0.
+
 This release implements only the finalized dark Home, Campaign and Settings design. It is the first step of V12, not authorization to begin subsequent features.
 
 ## Changes

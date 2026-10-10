@@ -144,7 +144,7 @@ public final class NativeV11Test extends Instrumentation {
     }
 
     private void v12Screens() throws Exception {
-        require("0.12.1".equals(read(type("AppVersion"),"NAME")),"V12.1 footer matches release");
+        require("0.12.2".equals(read(type("AppVersion"),"NAME")),"V12.2 footer matches release");
         call(scene,"start",1); Object model = read(scene,"model");
         call(model,"launch",0,1,.25); write(model,"elapsed",17f);
         write(scene,"overlay",constant("GameScene","MENU"));
@@ -510,7 +510,8 @@ public final class NativeV11Test extends Instrumentation {
             Object b = optionalButton(named[0]);
             if (b == null) continue;
             String translated = (String)call(type("Localization"), "translate", language, named[1]);
-            require(translated.equals(read(b, "label")), "localized accessible name " + named[0]);
+            String label = (String)read(b,"label");
+            require(named[0].equals("daily") ? label.startsWith(translated+" / ") : translated.equals(label), "localized accessible name " + named[0]);
             if (!language.equals("en")) require(!translated.equals(named[1]), "non-English spoken name is translated " + named[0]);
         }
         require(!provider().performAction(virtualId("not-a-button"), AccessibilityNodeInfo.ACTION_CLICK, null), "unknown native virtual action rejected");

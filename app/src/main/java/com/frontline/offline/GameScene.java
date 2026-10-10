@@ -1227,7 +1227,7 @@ public final class GameScene {
         else if (id.equals("settings")) {
             settingsReturn = overlay; commandScreens.languages = false; commandScreens.tools = false;
             commandScreens.reset(SETTINGS); overlay = SETTINGS;
-        } else if (id.equals("sectors")) {
+        } else if (id.equals("sectors") || id.equals("campaign_progress")) {
             previousOverlay = overlay; sectorPage = Campaign.chapterIndex(profile.selectedSector); overlay = SECTORS;
         } else if (id.equals("back")) back();
         else if (id.equals("language_picker")) { commandScreens.languages = !commandScreens.languages; buttons.clear(); }

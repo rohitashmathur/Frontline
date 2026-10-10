@@ -1,5 +1,7 @@
 # Native Screenshots
 
+**Current 0.12.2 source has no new screenshots.** Neither 0.12.1 nor 0.12.2 was built/captured in these code-only steps. The galleries below retain their actual historical versions; they are not current-layout evidence. See [pending Step 2 verification](verification-v12-step2.md).
+
 ## V12 Step 1
 
 Actual final `0.12.0` Android Canvas captures, not the design mockups. The deterministic fixture stages a retained round and legacy clear to inspect the Home, connected campaign path and grouped settings. Automated checks cover English, Indonesian and Hindi at four display configurations; these are not evidence of physical-phone usability or organically won battles.

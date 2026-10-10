@@ -7,6 +7,7 @@ public final class V12ScreensTest {
     private static int checks;
     private static final GameScene.Events EVENTS = new GameScene.Events() { public void changed() {} public void cue(int kind) {} };
     public static void main(String[] args) throws Exception {
+        deckDetails(); previewCache(); campaignTrail(); logUsage();
         for (String language : Localization.LANGUAGES) for (float height : new float[] {620,780,1120}) for (float touch : new float[] {64,82}) {
             GameScene.Profile profile = new GameScene.Profile(); profile.language = language; profile.tutorialSeen = true;
             profile.unlocked = 59; profile.best[0] = 1700;
@@ -59,8 +60,90 @@ public final class V12ScreensTest {
             GameScene s = new GameScene(p,m,EVENTS); s.back(); byte[] before = m.save();
             press(s,"resume",780); check(s.overlay == GameScene.NONE && Arrays.equals(before,m.save()),"Command Deck resumes each actual battle mode");
         }
-        check(AppVersion.NAME.equals("0.12.1") && AppVersion.CODE == 13,"V12.1 release number");
+        check(AppVersion.NAME.equals("0.12.2") && AppVersion.CODE == 14,"V12.2 release number");
         System.out.println("PASS: "+checks+" V12 screen checks.");
+    }
+    private static final class Capture implements CommandScreens.Controls {
+        final java.util.Map<String,String> labels = new java.util.HashMap<>();
+        final java.util.Map<String,float[]> bounds = new java.util.HashMap<>();
+        public void add(String id,String label,float x,float y,float w,float h) {
+            labels.put(id,label); bounds.put(id,new float[] {x,y,w,h});
+        }
+    }
+    private static Capture home(CommandScreens screens,GameScene.Profile p,long now) {
+        Capture controls = new Capture();
+        screens.home(new GameModelTest.NullGraphics(),controls,null,false,now,1120,64);
+        return controls;
+    }
+    private static void deckDetails() {
+        long day = 1791504000000L;
+        for (String language : Localization.LANGUAGES) {
+            GameScene.Profile p = new GameScene.Profile(); p.language = language; p.unlocked = 59;
+            CommandScreens screens = new CommandScreens(p);
+            Capture start = home(screens,p,day);
+            String available = Localization.text(language,"deck.daily_available");
+            check(start.labels.get("daily").equals(Localization.text(language,"deck.daily_label",available,
+                Localization.text(language,"deck.daily_resets",24,0))),"Daily countdown uses UTC reset");
+            check(start.bounds.get("daily")[0] == 22 && start.bounds.get("daily")[2] == 376,"Daily uses full-width target");
+            check(start.labels.get("campaign_progress").equals(Localization.text(language,"deck.progress_label",0,60,0)),"Unlock code is not a campaign clear");
+            int id = Challenge.dailyId(Challenge.date(day));
+            GameModel daily = Challenge.PRESETS[id].create(1,Challenge.dailySeed(Challenge.date(day)),id,Challenge.date(day));
+            daily.outcome = GameModel.WON; daily.terminalReason = GameModel.TERMINAL_VICTORY;
+            daily.elapsed = 120; daily.objectiveProgress = daily.objectiveSeconds;
+            check(p.progress.recordChallenge(daily),"Staged Daily completion records");
+            Capture done = home(screens,p,day+86_399_999);
+            check(done.labels.get("daily").equals(Localization.text(language,"deck.daily_label",
+                Localization.text(language,"deck.daily_done"),Localization.text(language,"deck.daily_minutes",1))),"Completed Daily retains last-minute countdown");
+            check(home(screens,p,day+86_400_000).labels.get("daily").equals(start.labels.get("daily")),"New UTC date is available again");
+            p.best[0] = 1700;
+            check(home(screens,p,day).labels.get("campaign_progress").equals(Localization.text(language,"deck.progress_label",1,60,1700)),"Ribbon includes earned historical progress");
+            p.run = RunState.newRun(9);
+            check(home(screens,p,day).labels.get("run").contains(Localization.text(language,"run.retries",1)),"Run retry count has its own detail");
+            p.lastRun = p.run.abandon(true,p.run.revision); p.run = null;
+            check(home(screens,p,day).labels.get("run").contains(Localization.text(language,"deck.run_last",0,5)),"Terminal run shows factual cleared count");
+        }
+    }
+    private static void previewCache() throws Exception {
+        GameScene.Profile p = new GameScene.Profile(); CommandScreens screens = new CommandScreens(p);
+        GameModel first = screens.homePreview(0,1); byte[] before = first.save();
+        home(screens,p,0); home(screens,p,60_000); p.language = "hi"; home(screens,p,120_000);
+        check(screens.homePreview(0,1) == first && Arrays.equals(before,first.save()),"Redraw/time/language reuse immutable preview");
+        GameModel actual = new GameModel(2,1,9); actual.elapsed = 7; byte[] active = actual.save();
+        screens.home(new GameModelTest.NullGraphics(),new Capture(),actual,true,0,1120,64);
+        check(screens.homePreview(0,1) == first && Arrays.equals(active,actual.save()),"Active preview neither mutates battle nor replaces cached map");
+        p.selectedSector = 1; home(screens,p,0); GameModel changed = screens.homePreview(1,1);
+        check(changed != first,"Sector change replaces preview");
+        p.difficulty = 2; home(screens,p,0);
+        check(screens.homePreview(1,2) != changed && screens.homePreview(1,2).difficulty == 2,"Difficulty change replaces preview");
+    }
+    private static void campaignTrail() {
+        for (float touch : new float[] {64,82}) {
+            GameScene.Profile p = new GameScene.Profile(); p.unlocked = 59;
+            CommandScreens screens = new CommandScreens(p); Capture controls = new Capture();
+            screens.campaign(new GameModelTest.NullGraphics(),controls,null,false,0,1120,touch);
+            float previous = 0;
+            for (int sector = 0; sector < 6; sector++) {
+                float[] point = screens.sectorPosition(sector), bounds = controls.bounds.get("level_"+sector);
+                check(bounds != null && point[0] == 64,"Vertical trail has one shared column");
+                check(sector == 0 || Math.abs(point[1]-previous-touch-12) < .01f,"Trail keeps compact stable spacing");
+                check(point[0] >= bounds[0] && point[0] <= bounds[0]+bounds[2] && point[1] >= bounds[1] && point[1] <= bounds[1]+bounds[3],"Node positions remain inside row touch targets");
+                previous = point[1];
+            }
+        }
+    }
+    private static void logUsage() {
+        for (String language : Localization.LANGUAGES) for (int count : new int[] {0,449,450,500}) {
+            GameScene.Profile p = new GameScene.Profile(); p.language = language; p.log.enabled = true;
+            for (int i = 0; i < count; i++) p.log.add(i,"fixture",null,"");
+            p.log.enabled = false;
+            CommandScreens screens = new CommandScreens(p); screens.tools = true;
+            GameModelTest.TextGraphics g = new GameModelTest.TextGraphics();
+            screens.settings(g,new Capture(),1800,64);
+            check(g.text.contains(Localization.text(language,"playtest.entries",count,500)),"Usage stays visible with logging disabled");
+            String warning = Localization.text(language,count == 500 ? "playtest.log_full" : "playtest.log_warning");
+            check(g.text.contains(warning) == (count >= 450),"Warnings start at 450 and explain eviction at 500");
+            check(p.log.size() == count && !p.log.enabled,"Rendering never clears entries or opts in");
+        }
     }
     private static void auditPages(GameScene s,float height) {
         s.scrollScreen(-10000);

@@ -7,8 +7,8 @@ android {
         applicationId 'com.frontline.offline'
         minSdk 24
         targetSdk 35
-        versionCode 13
-        versionName '0.12.1'
+        versionCode 14
+        versionName '0.12.2'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

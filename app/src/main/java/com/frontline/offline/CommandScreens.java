@@ -8,6 +8,8 @@ final class CommandScreens {
     private final Profile profile;
     private final float[] offsets = new float[3];
     private int slot, page = -1;
+    private GameModel cachedPreview;
+    private static final float CAMPAIGN_TRAIL_TOP = 106, CAMPAIGN_NODE_X = 64;
     private float top, bottom, limit, touch = 64;
     boolean languages, tools;
     CommandScreens(Profile profile) { this.profile = profile; }
@@ -50,7 +52,10 @@ final class CommandScreens {
         g.text(value,x,baseline,size,color,bold,align);
     }
     private void action(Graphics g,Controls controls,String id,String label,float x,float py,float w,float h,boolean primary) {
-        hit(controls,id,label,x,py,w,h);
+        action(g,controls,id,label,label,x,py,w,h,primary);
+    }
+    private void action(Graphics g,Controls controls,String id,String label,String spoken,float x,float py,float w,float h,boolean primary) {
+        hit(controls,id,spoken,x,py,w,h);
         if (!primary) g.rect(x,py,w,h,6,BORDER);
         g.rect(x+(primary ? 0 : 1),py+(primary ? 0 : 1),w-(primary ? 0 : 2),h-(primary ? 0 : 2),6,primary ? COLORS[0] : BACKGROUND);
         boolean playIcon = primary && (id.equals("play") || id.equals("resume"));
@@ -74,70 +79,117 @@ final class CommandScreens {
     void home(Graphics g,Controls controls,GameModel model,boolean active,long now,float height,float minTouch) {
         touch = Math.max(64,minTouch); header(g,controls,"",true,true);
         float dailyY = 18+touch;
-        controls.add("daily","Daily Mission",218,dailyY,180,touch);
         boolean done = profile.progress.dailyCompleted(Challenge.date(now),1,Challenge.DAILY_VERSION,GameModel.RULES_VERSION,Challenge.CONFIG_VERSION);
-        icon(g,"daily",231,dailyY+touch/2,COLORS[0]);
-        text(g,"Daily Mission",259,dailyY+touch/2+4,13,131,COLORS[0],false,0);
-        g.circle(396,dailyY+touch/2,2.5f,done ? COLORS[0] : COLORS[2]);
+        String dailyState = tr(done ? "deck.daily_done" : "deck.daily_available");
+        String reset = dailyReset(now);
+        controls.add("daily",tr("deck.daily_label",dailyState,reset),22,dailyY,376,touch);
+        g.rect(22,dailyY,376,touch,8,BORDER); g.rect(23,dailyY+1,374,touch-2,7,PANEL);
+        icon(g,"daily",42,dailyY+touch/2,done ? COLORS[0] : WHITE);
+        text(g,"Daily Mission",65,dailyY+touch/2-5,15,290,WHITE,true,0);
+        text(g,dailyState+" / "+reset,65,dailyY+touch/2+16,12,300,MUTED,false,0);
+        chevron(g,382,dailyY+touch/2,MUTED);
         int columns = Math.min(5,Math.max(1,(int)(376/touch)));
         float shortcuts = ((5+columns-1)/columns)*(touch+24);
-        float extra = touch-64;
-        begin(g,MENU,height,minTouch,dailyY+touch+16,590+extra+shortcuts);
+        float headerHeight = dailyY+touch+10;
+        float heroExtra = Math.min(24,Math.max(0,height-40-headerHeight-424));
+        float coverageY = 129+heroExtra, barY = 141+heroExtra, actionY = 157+heroExtra;
+        float modeY = actionY+touch+12, modeHeight = Math.max(104,touch);
+        float labY = modeY+modeHeight+12, labHeight = Math.max(74,touch);
+        float shortcutY = labY+labHeight+36, progressY = shortcutY+shortcuts+20;
+        float progressHeight = Math.max(80,touch);
+        begin(g,MENU,height,minTouch,headerHeight,progressY+progressHeight+16);
         int sector = active ? model.levelIndex : profile.selectedSector;
         String category = active && model.battleMode == GameModel.MODE_RUN ? tr("run.title")
             : active && model.battleMode == GameModel.MODE_LOGISTICS ? tr("deck.lab")
             : active && model.objectiveType != 0 ? "Missions" : Campaign.chapter(sector).name;
-        text(g,category,22,y(15),11,230,MUTED,true,0);
+        text(g,category,22,y(13),11,230,MUTED,true,0);
         if (!active || model.battleMode == GameModel.MODE_CAMPAIGN && model.objectiveType == 0)
-            text(g,tr("deck.chapter",Campaign.chapterIndex(sector)+1,Campaign.CHAPTERS.length),398,y(15),11,140,MUTED,false,2);
-        preview(g,active ? model : new GameModel(sector,profile.difficulty,0),24,y(35),124,130);
+            text(g,tr("deck.chapter",Campaign.chapterIndex(sector)+1,Campaign.CHAPTERS.length),398,y(13),11,140,MUTED,false,2);
+        preview(g,active ? model : homePreview(sector,profile.difficulty),24,y(26),124,96+heroExtra);
         String title = active && model.battleMode == GameModel.MODE_LOGISTICS ? tr("logistics.map."+Logistics.getIndex(model))
             : active && model.objectiveType != 0 ? Challenge.PRESETS[Math.max(0,Math.min(Challenge.PRESETS.length-1,model.challengeId))].name : GameModel.LEVELS[sector].name;
-        text(g,title,166,y(69),26,230,WHITE,true,0);
+        text(g,title,166,y(45),24,230,WHITE,true,0);
         String detail = active && model.battleMode == GameModel.MODE_RUN && profile.run != null ? tr("deck.run_battle",profile.run.node+1)
             : tr("deck.sector",sector+1,GameModel.LEVELS.length);
-        text(g,detail,166,y(97),12,230,MUTED,false,0);
-        text(g,GameModel.DIFFICULTIES[active ? model.difficulty : profile.difficulty],166,y(119),12,230,MUTED,false,0);
-        text(g,tr(active ? "deck.in_progress" : "deck.ready"),166,y(147),12,230,COLORS[0],false,0);
+        text(g,detail,166,y(66),12,230,MUTED,false,0);
+        text(g,GameModel.DIFFICULTIES[active ? model.difficulty : profile.difficulty],166,y(86),12,230,MUTED,false,0);
+        text(g,tr(active ? "deck.in_progress" : "deck.ready"),166,y(106),12,230,COLORS[0],false,0);
         int coverage = active ? Math.round(100f*model.owned(0)/model.territories.size()) : 0;
-        text(g,active ? tr("deck.coverage",coverage) : tr("deck.star_target",GameScene.time(GameModel.LEVELS[sector].parSeconds)),22,y(185),13,270,WHITE,true,0);
-        if (active) g.text(GameScene.time(model.elapsed),398,y(185),13,MUTED,false,2);
+        text(g,active ? tr("deck.coverage",coverage) : tr("deck.star_target",GameScene.time(GameModel.LEVELS[sector].parSeconds)),22,y(coverageY),13,270,WHITE,true,0);
+        if (active) g.text(GameScene.time(model.elapsed),398,y(coverageY),13,MUTED,false,2);
         if (active) {
-            g.rect(22,y(198),376,8,2,BORDER);
+            g.rect(22,y(barY),376,8,2,BORDER);
             float x = 22;
             for (int owner = 0; owner <= model.level().opponents; owner++) {
                 float w = 376f*model.owned(owner)/model.territories.size();
-                if (w > 0) g.rect(x,y(198),Math.max(0,w-1),8,0,COLORS[model.level().faction(owner)]);
+                if (w > 0) g.rect(x,y(barY),Math.max(0,w-1),8,0,COLORS[model.level().faction(owner)]);
                 x += w;
             }
         }
         if (active) {
-            action(g,controls,"resume","Continue Battle",22,y(227),238,touch,true);
-            action(g,controls,"play","New Attempt",272,y(227),126,touch,false);
-        } else action(g,controls,"play","Play",22,y(227),376,touch,true);
-        g.line(22,y(310+extra),398,y(310+extra),1,BORDER); text(g,tr("deck.modes"),22,y(335+extra),11,376,MUTED,true,0);
-        mode(g,controls,"run",tr("deck.classic_run"),profile.run != null && !profile.run.terminal() ? tr("deck.run_battle",profile.run.node+1) : tr("deck.five_battles"),22,y(342+extra),182,Math.max(104,touch));
-        mode(g,controls,"missions","Missions",tr("deck.objectives"),216,y(342+extra),182,Math.max(104,touch));
-        hit(controls,"logistics",tr("deck.lab"),22,y(458+extra),376,Math.max(80,touch));
-        icon(g,"logistics",39,y(495+extra),MUTED); text(g,tr("deck.lab"),65,y(484+extra),17,290,WHITE,true,0);
-        text(g,tr("deck.routed_maps",Logistics.PRESETS.length),65,y(506+extra),12,290,MUTED,false,0);
-        text(g,tr("logistics.experimental"),65,y(527+extra),11,290,COLORS[2],true,0); chevron(g,385,y(495+extra),MUTED);
-        g.line(22,y(548+extra),398,y(548+extra),1,BORDER); text(g,tr("deck.more"),22,y(577+extra),11,376,MUTED,true,0);
+            action(g,controls,"resume","Continue Battle",22,y(actionY),238,touch,true);
+            action(g,controls,"play","New Attempt",272,y(actionY),126,touch,false);
+        } else action(g,controls,"play","Play",22,y(actionY),376,touch,true);
+        boolean liveRun = profile.run != null && !profile.run.terminal();
+        RunState lastRun = profile.lastRun != null ? profile.lastRun : profile.run;
+        String runDetail = liveRun ? tr("deck.run_battle",profile.run.node+1)
+            : lastRun != null && lastRun.terminal() ? tr("deck.run_last",lastRun.battlesCleared(),RunState.BATTLE_COUNT) : tr("deck.five_battles");
+        String retryDetail = liveRun ? tr("run.retries",profile.run.retriesRemaining()) : "";
+        mode(g,controls,"run",tr("deck.classic_run"),runDetail,retryDetail,22,y(modeY),182,modeHeight);
+        mode(g,controls,"missions","Missions",tr("deck.objectives"),"",216,y(modeY),182,modeHeight);
+        hit(controls,"logistics",tr("deck.lab"),22,y(labY),376,labHeight);
+        icon(g,"logistics",39,y(labY+labHeight/2),MUTED); text(g,tr("deck.lab"),65,y(labY+22),17,290,WHITE,true,0);
+        text(g,tr("deck.routed_maps",Logistics.PRESETS.length),65,y(labY+43),12,290,MUTED,false,0);
+        text(g,tr("logistics.experimental"),65,y(labY+62),11,290,COLORS[2],true,0); chevron(g,385,y(labY+labHeight/2),MUTED);
+        g.line(22,y(labY+labHeight+8),398,y(labY+labHeight+8),1,BORDER);
+        text(g,tr("deck.more"),22,y(shortcutY-9),11,376,MUTED,true,0);
         String[] ids = {"sectors","challenges","mastery","tutorial","help"};
         String[] labels = {"Sectors","Challenges","Mastery","How to Play","Rules"};
         float width = 376f/columns;
         for (int i = 0; i < ids.length; i++) {
-            float x = 22+(i%columns)*width, py = y(590+extra+(i/columns)*(touch+24));
+            float x = 22+(i%columns)*width, py = y(shortcutY+(i/columns)*(touch+24));
             hit(controls,ids[i],labels[i],x,py,width,touch+24);
             icon(g,ids[i],x+width/2,py+touch/2,i == 0 ? COLORS[0] : WHITE);
             text(g,labels[i],x+width/2,py+touch+13,11,width-6,MUTED,false,1);
         }
+        campaignProgress(g,controls,progressY,progressHeight);
         end(g,height);
     }
-    private void mode(Graphics g,Controls controls,String id,String label,String detail,float x,float py,float w,float h) {
-        hit(controls,id,label,x,py,w,h); g.rect(x,py,w,h,8,BORDER); g.rect(x+1,py+1,w-2,h-2,7,PANEL);
-        icon(g,id,x+27,py+25,COLORS[0]); text(g,label,x+14,py+62,17,w-28,WHITE,true,0);
-        text(g,detail,x+14,py+88,12,w-28,MUTED,false,0);
+    GameModel homePreview(int sector,int difficulty) {
+        if (cachedPreview == null || cachedPreview.levelIndex != sector || cachedPreview.difficulty != difficulty)
+            cachedPreview = new GameModel(sector,difficulty,0);
+        return cachedPreview;
+    }
+    private String dailyReset(long now) {
+        long remaining = Challenge.untilReset(now);
+        long minutes = (remaining+59_999)/60_000;
+        return minutes < 60 ? tr("deck.daily_minutes",minutes) : tr("deck.daily_resets",minutes/60,minutes%60);
+    }
+    private void campaignProgress(Graphics g,Controls controls,float row,float h) {
+        int cleared = 0;
+        for (int i = 0; i < GameModel.LEVELS.length; i++) if (profile.cleared(i)) cleared++;
+        int score = profile.totalScore();
+        hit(controls,"campaign_progress",tr("deck.progress_label",cleared,GameModel.LEVELS.length,score),22,y(row),376,h);
+        g.line(22,y(row),398,y(row),1,BORDER);
+        text(g,"Campaign",22,y(row+20),11,190,MUTED,true,0);
+        text(g,tr("deck.cleared",cleared,GameModel.LEVELS.length),398,y(row+20),11,180,MUTED,false,2);
+        float width = (376f-4*(Campaign.CHAPTERS.length-1))/Campaign.CHAPTERS.length;
+        for (int chapter = 0; chapter < Campaign.CHAPTERS.length; chapter++) {
+            int count = 0;
+            for (int sector = chapter*6; sector < chapter*6+6; sector++) if (profile.cleared(sector)) count++;
+            int color = COLORS[chapter == 0 ? 0 : Campaign.CHAPTERS[chapter].rulerFaction];
+            float x = 22+chapter*(width+4);
+            g.rect(x,y(row+32),width,8,2,mix(PANEL,color,.35f));
+            if (count > 0) g.rect(x,y(row+32),width*count/6,8,2,color);
+        }
+        text(g,tr("deck.best_total",score),22,y(row+65),12,376,COLORS[0],true,0);
+    }
+    private void mode(Graphics g,Controls controls,String id,String label,String detail,String extra,float x,float py,float w,float h) {
+        hit(controls,id,translated(label)+" / "+detail+(extra.isEmpty() ? "" : " / "+extra),x,py,w,h);
+        g.rect(x,py,w,h,8,BORDER); g.rect(x+1,py+1,w-2,h-2,7,PANEL);
+        icon(g,id,x+27,py+20,COLORS[0]); text(g,label,x+14,py+50,17,w-28,WHITE,true,0);
+        text(g,detail,x+14,py+72,12,w-28,MUTED,false,0);
+        if (!extra.isEmpty()) text(g,extra,x+14,py+92,12,w-28,COLORS[2],false,0);
     }
     void campaign(Graphics g,Controls controls,GameModel model,boolean active,int chapterIndex,float height,float minTouch) {
         touch = Math.max(64,minTouch); header(g,controls,"Campaign",false,true);
@@ -150,41 +202,43 @@ final class CommandScreens {
         text(g,tr("deck.chapter",chapterIndex+1,Campaign.CHAPTERS.length),210,header+touch/2+5,12,376-2*touch,MUTED,true,1);
         header += touch+8;
         bottom = height-footer; top = header; slot = 1;
-        float nodeSize = touch+3, row = nodeSize+54, content = 151+6*row;
+        float nodeSize = Math.min(64,touch-8), row = campaignRow(), content = CAMPAIGN_TRAIL_TOP+5*row+touch;
         limit = Math.max(0,content-(bottom-top));
-        if (page != chapterIndex) { page = chapterIndex; offsets[1] = Math.max(0,151+(profile.selectedSector-first)*row-(bottom-top)/2); }
+        boolean selectedInChapter = Campaign.chapterIndex(profile.selectedSector) == chapterIndex;
+        if (page != chapterIndex) {
+            page = chapterIndex;
+            offsets[1] = selectedInChapter ? Math.max(0,CAMPAIGN_TRAIL_TOP+(profile.selectedSector-first)*row+touch/2-(bottom-top)/2) : 0;
+        }
         offsets[1] = Math.min(offsets[1],limit); g.clip(0,top,420,bottom-top);
-        text(g,"Campaign",22,y(15),11,220,MUTED,true,0);
-        text(g,tr("deck.cleared",cleared,6),398,y(15),11,130,MUTED,false,2);
-        text(g,chapter.name,22,y(51),29,376,WHITE,true,0);
-        text(g,Campaign.FACTIONS[chapter.rulerFaction]+" / "+Campaign.RULERS[chapter.rulerFaction],22,y(80),12,376,COLORS[chapter.rulerFaction == 0 ? 1 : chapter.rulerFaction],false,0);
-        text(g,chapter.firstLine,22,y(105),12,376,MUTED,false,0);
+        text(g,"Campaign",22,y(14),11,220,MUTED,true,0);
+        text(g,tr("deck.cleared",cleared,6),398,y(14),11,130,MUTED,false,2);
+        text(g,chapter.name,22,y(44),26,376,WHITE,true,0);
+        text(g,Campaign.FACTIONS[chapter.rulerFaction]+" / "+Campaign.RULERS[chapter.rulerFaction],22,y(67),12,376,COLORS[chapter.rulerFaction == 0 ? 1 : chapter.rulerFaction],false,0);
+        text(g,chapter.firstLine,22,y(88),12,376,MUTED,false,0);
         for (int n = 0; n < 5; n++) {
-            float ax = n%2 == 0 ? 112 : 308, bx = n%2 == 0 ? 308 : 112;
-            float ay = y(152+n*row+nodeSize/2), by = ay+row, distance = (float)Math.hypot(bx-ax,by-ay), trim = nodeSize*.55f;
-            float sx = ax+(bx-ax)*trim/distance, sy = ay+(by-ay)*trim/distance;
-            float ex = bx-(bx-ax)*trim/distance, ey = by-(by-ay)*trim/distance;
+            float sy = y(CAMPAIGN_TRAIL_TOP+n*row+touch/2+nodeSize/2+2);
+            float ey = y(CAMPAIGN_TRAIL_TOP+(n+1)*row+touch/2-nodeSize/2-2);
             boolean open = first+n+1 <= profile.unlocked;
-            if (open) g.line(sx,sy,ex,ey,2,COLORS[0]);
-            else for (float t = 0; t < 1; t += .1f) g.line(sx+(ex-sx)*t,sy+(ey-sy)*t,sx+(ex-sx)*Math.min(1,t+.05f),sy+(ey-sy)*Math.min(1,t+.05f),2,BORDER);
+            if (open) g.line(CAMPAIGN_NODE_X,sy,CAMPAIGN_NODE_X,ey,2,COLORS[0]);
+            else for (float dy = sy; dy < ey; dy += 10) g.line(CAMPAIGN_NODE_X,dy,CAMPAIGN_NODE_X,Math.min(ey,dy+5),2,BORDER);
         }
         for (int n = 0; n < 6; n++) {
-            int sector = first+n; float x = n%2 == 0 ? 112 : 308, py = y(152+n*row), cy = py+nodeSize/2;
+            int sector = first+n; float x = CAMPAIGN_NODE_X, py = y(CAMPAIGN_TRAIL_TOP+n*row), cy = py+touch/2;
             boolean locked = sector > profile.unlocked, selected = sector == profile.selectedSector, done = profile.cleared(sector);
-            if (!locked) hit(controls,"level_"+sector,GameModel.LEVELS[sector].name,x-88,py,176,nodeSize+44);
+            if (selected && !locked) g.rect(22,py,376,touch,0,mix(PANEL,COLORS[0],.1f));
             g.polygon(hex(x,cy,nodeSize/2),selected && !locked ? COLORS[0] : done ? 0xFF253E36 : PANEL,locked ? BORDER : COLORS[0],selected ? 4 : 2);
             g.text(Integer.toString(sector+1),x-(locked ? 8 : 0),cy+7,23,selected && !locked ? BACKGROUND : locked ? MUTED : WHITE,true,1);
             if (locked) icon(g,"lock",x+17,cy,MUTED);
-            text(g,GameModel.LEVELS[sector].name,x,py+nodeSize+19,14,178,locked ? MUTED : WHITE,true,1);
+            text(g,GameModel.LEVELS[sector].name,112,cy-5,16,276,locked ? MUTED : WHITE,true,0);
             int best = profile.progress.campaignBest(sector,profile.difficulty,GameModel.RULES_VERSION);
             int historical = profile.progress.campaignBest(sector,profile.difficulty,10);
             String status = locked ? "Locked" : done ? best > 0 ? tr("deck.best",best) : profile.best[sector] > 0 ? tr("deck.legacy",profile.best[sector]) : historical > 0 ? tr("deck.historical",historical) : "Cleared"
                 : active && model.battleMode == GameModel.MODE_CAMPAIGN && model.objectiveType == 0 && model.levelIndex == sector ? tr("deck.in_progress") : "Available";
-            text(g,status,x,py+nodeSize+39,11,178,MUTED,false,1);
+            text(g,status,112,cy+17,12,276,MUTED,false,0);
+            if (!locked) hit(controls,"level_"+sector,translated(GameModel.LEVELS[sector].name)+" / "+translated(status),22,py,376,n == 5 ? touch : row);
         }
         g.unclip();
         g.rect(0,bottom,420,footer-40,0,PANEL);
-        boolean selectedInChapter = Campaign.chapterIndex(profile.selectedSector) == chapterIndex;
         if (selectedInChapter) {
             boolean resume = active && model.battleMode == GameModel.MODE_CAMPAIGN && model.objectiveType == 0 && model.levelIndex == profile.selectedSector;
             controls.add(resume ? "resume" : "play",resume ? "Continue Battle" : "Play",22,bottom+14,376,touch);
@@ -201,13 +255,15 @@ final class CommandScreens {
         icon(g,id.equals("chapter_prev") ? "back" : "next",x+touch/2,py+touch/2,enabled ? WHITE : BORDER);
     }
     float[] sectorPosition(int sector) {
-        float row = touch+57;
-        return new float[] {sector%2 == 0 ? 112 : 308,y(152+(sector%6)*row+(touch+3)/2)};
+        return new float[] {CAMPAIGN_NODE_X,y(CAMPAIGN_TRAIL_TOP+(sector%6)*campaignRow()+touch/2)};
     }
+    private float campaignRow() { return touch+12; }
     void settings(Graphics g,Controls controls,float height,float minTouch) {
         touch = Math.max(64,minTouch); header(g,controls,"Settings",false,false);
         float languageRows = languages ? 3*touch : 0;
-        float content = 312+7*touch+(tools ? 2*touch : 0)+languageRows;
+        boolean logWarning = profile.log.size() >= PlaytestLog.ENTRY_LIMIT*9/10;
+        float logDetails = tools ? 32+(logWarning ? 48 : 0) : 0;
+        float content = 312+7*touch+(tools ? 2*touch : 0)+languageRows+logDetails;
         begin(g,SETTINGS,height,minTouch,26+touch,content);
         float row = 24; text(g,tr("deck.audio"),22,y(row),11,376,MUTED,true,0); row += 16;
         settingsToggle(g,controls,"music","Music",row,profile.music); row += touch;
@@ -232,7 +288,16 @@ final class CommandScreens {
         settingsLink(g,controls,"tools",tr("deck.tools"),"",row); row += touch;
         if (tools) {
             settingsToggle(g,controls,"playtest_log","Local Playtest Log",row,profile.log.enabled); row += touch;
-            action(g,controls,"export_log","Export CSV",22,y(row),182,touch,false);
+            String usage = tr("playtest.entries",profile.log.size(),PlaytestLog.ENTRY_LIMIT);
+            text(g,usage,22,y(row+16),12,376,MUTED,false,0); row += 32;
+            String warning = "";
+            if (logWarning) {
+                warning = tr(profile.log.size() == PlaytestLog.ENTRY_LIMIT ? "playtest.log_full" : "playtest.log_warning");
+                text(g,warning,22,y(row+13),12,376,COLORS[2],true,0);
+                text(g,tr("playtest.export_reminder"),22,y(row+33),12,376,MUTED,false,0); row += 48;
+            }
+            String exportLabel = translated("Export CSV")+" / "+usage+(warning.isEmpty() ? "" : " / "+warning+" / "+tr("playtest.export_reminder"));
+            action(g,controls,"export_log","Export CSV",exportLabel,22,y(row),182,touch,false);
             action(g,controls,"clear_log","Clear Log",216,y(row),182,touch,false); row += touch;
         }
         limit = Math.max(0,row+16-(bottom-top)); offsets[2] = Math.min(offsets[2],limit);
@@ -259,7 +324,10 @@ final class CommandScreens {
             int color = t.owner < 0 ? BORDER : COLORS[model.level().faction(t.owner)];
             g.polygon(hex(cx,cy,scale*.93f),mix(PANEL,color,.16f),color,1);
             if (scale >= 12) g.text(Integer.toString(t.count()),cx,cy+3,10,WHITE,true,1);
-            if (t.capital) g.polygon(new float[] {cx-4,cy-5,cx-4,cy-10,cx,cy-7,cx+4,cy-10,cx+4,cy-5},color,0,0);
+            if (t.capital) {
+                float mark = Math.min(1,scale/12);
+                g.polygon(new float[] {cx-4*mark,cy-5*mark,cx-4*mark,cy-10*mark,cx,cy-7*mark,cx+4*mark,cy-10*mark,cx+4*mark,cy-5*mark},color,0,0);
+            }
         }
     }
     private static float[] hex(float x,float y,float radius) {

@@ -1,6 +1,8 @@
-# Frontline Architecture (V12 Step 1)
+# Frontline Architecture (V12 Step 2)
 
-Frontline 0.12.0 is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in. V12 step 1 changes presentation/navigation only; V11 battle rules, records and binary saves remain in force.
+Current source version: `0.12.2` (version code `14`).
+
+Frontline is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in. V12 changes presentation/navigation and optional local playtest observation; V11 battle rules, records and binary saves remain in force. The 0.12.1/0.12.2 source has not been built or tested; [Step 2 verification](verification-v12-step2.md) is pending. Existing V12 screenshots and verification describe 0.12.0 only.
 
 ## Components
 
@@ -9,7 +11,7 @@ flowchart LR
     Activity[MainActivity / Android lifecycle]
     View[BattleView / Canvas and touch adapter]
     Scene[GameScene / screens, gestures, camera and HUD]
-    Command[CommandScreens / dark deck, chapter path, settings and scroll]
+    Command[CommandScreens / cached deck, vertical trail, settings and scroll]
     Model[GameModel / battle simulation and AI]
     Campaign[Campaign / factions and chapter story]
     Profile[Profile / scores, unlocks and settings]
@@ -23,6 +25,7 @@ flowchart LR
     RoutedRecords[LogisticsRecords / separate exact records]
     Log[PlaytestLog / bounded opt-in snapshots]
     Export[Android document picker / manual CSV]
+    Feedback[Optional native difficulty prompt / attempt guard]
     Storage[(SharedPreferences: frontline-v1)]
     Music[BackgroundMusic / MediaPlayer and audio focus]
     Assets[Resources / theme, icons and original soundtrack]
@@ -51,6 +54,8 @@ flowchart LR
     Challenges --> Model
     View --> Export
     Export --> Log
+    View --> Feedback
+    Feedback --> Scene
     View <-->|load and save| Storage
     View --> Music
     Music --> Assets
@@ -62,13 +67,13 @@ flowchart LR
 
 | Component | Responsibility | Source |
 | --- | --- | --- |
-| Android adapter | Lifecycle, safe-area layout, Canvas, one/two-finger input, audio/haptics, storage, native code dialog and manual document export | `app/src/main/java/com/frontline/offline/MainActivity.java` |
+| Android adapter | Lifecycle, safe-area layout, Canvas, one/two-finger input, audio/haptics, storage, native code/feedback dialogs, minute-boundary Home refresh and manual document export | `app/src/main/java/com/frontline/offline/MainActivity.java` |
 | Scene controller | Protected attempt flow, practical tutorial, campaign/missions/daily/mastery/help screens, results, camera and event-based HUD | `GameScene.java` |
-| Command surfaces | Dark Home, connected campaign path, full-page settings, safe clipped scrolling and version footer; no simulation mutation | `CommandScreens.java`, `AppVersion.java` |
+| Command surfaces | Cached Home preview, Daily state/reset, factual Run details, earned campaign ribbon, compact vertical trail, log usage/warnings, safe clipped scrolling and version footer; no simulation mutation | `CommandScreens.java`, `AppVersion.java` |
 | Rules | Generation/caps, dispatch/interception/arrivals, objective counters, AI styles, resignation, history/events and exact binary saves | `GameModel.java` |
 | Challenge catalogue | Nine validated objective presets, configurable objectives, deterministic UTC date/version seeds and reset countdown | `Challenge.java` |
 | New progress | Difficulty-specific campaign/challenge records, bounded daily bests, mastery progress/awards and cosmetic selection | `Progress.java` |
-| Local measurement | Opt-in bounded event snapshots, checksummed persistence and escaped CSV, no Android/network dependency | `PlaytestLog.java` |
+| Local measurement | Opt-in 500-entry snapshots, build/attempt context, explicit event boundaries, checksummed persistence and escaped CSV, no Android/network dependency | `PlaytestLog.java` |
 | Objective result | Shared completion policy and persisted reason/argument interpretation; no mission speed stars | `ObjectiveResult.java` |
 | Localization | Offline stable keys and formatted sentences, shared by Android and portable tests | `Localization.java` |
 | Classic runs | Five frozen nodes, versioned perks, battle associations, idempotent councils/retry and factual summary | `RunState.java`, `RunScreens.java` |
@@ -148,6 +153,16 @@ flowchart TD
 
 The tutorial's practice state cannot modify a retained battle. Screens outside the battlefield freeze simulation. Camera gestures cancel troop drags and do not change troop ownership, counts, elapsed time or scoring. Settings difficulty is next-attempt only. Selection is independent of an active attempt; confirmation is required only for actual replacement. Cancel restores the previous paused screen/model, not a newly generated map. V12 keeps campaign selection on the connected path. Settings has a separate return context, so visiting it from Campaign cannot replace Campaign's own Back destination. Content scroll drags cancel button activation, visible hit targets are kept outside the fixed headers/footer, and the Android accessibility host exposes forward/backward scroll actions.
 
+### Current Command Surfaces
+
+- Home retains one inactive map preview keyed by sector/difficulty. It never ticks that preview; an active battle uses the retained model instead. Small crowns scale with preview tile size.
+- Daily uses the existing UTC date/reset helpers and exact current-rule completion query. A lifecycle-managed callback redraws Home at wall-clock minute boundaries; it is removed on stop/dispose and outside Home. It does not run simulation or alter an existing Daily attempt's identity.
+- The campaign ribbon counts earned clears across retained records, not unlocked sectors, and opens the selected chapter. The vertical trail shares drawing/position geometry; chapter navigation, protected replacement and footer actions are unchanged.
+- Expanded Playtest Tools show usage while logging is on or off. A warning starts at 450 entries, and at 500 it explicitly describes oldest-event replacement. Export/clear remain manual; capacity and persistence format are unchanged.
+- Home Run details separate battle and retry facts. A finished run is summarized by actual battles cleared. No streak state, new reward or rule migration is introduced.
+
+These are source-level implementation descriptions, not verified layout or lifecycle results for 0.12.2.
+
 ## Simulation Flow
 
 Classic campaign and Run keep the direct-flight path. Experimental Logistics alone uses deterministic ID-ordered BFS with friendly interior tiles and a single adjacent attack hop. Each routed packet retains its full path and current leg; arrivals split the frame in time order, with existing stable packet ordering for simultaneous arrivals. FL06 stores this state, stable map ID and configuration/routing version. Classic continues writing FL05, with FL01-FL05 readers retained. Logistics records have their own checksummed preference component, and corrupt bytes are quarantined without touching campaign progress.
@@ -190,12 +205,13 @@ Collision tests use relative motion over the tick, not a single rendered positio
 - New saves validate size, values, owner IDs, map size, convoy limits, objective/history consistency, timers, dates and resignation state. Exact RNG persistence keeps subsequent AI/setup randomness consistent across V10 save/resume. All restored states open the menu rather than auto-running.
 - The daily attempt's original date/configuration remains in its battle save. Current date changes only the next daily selection. The latest 60 daily records and 500 log entries bound local storage.
 - Manual CSV export uses `ACTION_CREATE_DOCUMENT`, writes only to the chosen URI and needs no storage/network permission. Cancelling the picker changes no gameplay data.
+- V12.1 adds attempt identifiers, first-dispatch observation and feedback guards as separate preference fields. New event context stays in log detail, preserving historical entries, CSV columns and the log binary format. Feedback is optional, only offered with local logging enabled, and guarded against duplicate or stale attempt callbacks. Home draws cannot create navigation events.
 
 ## Build and Platform Boundaries
 
 The PowerShell build compiles Java, generates the original WAV loop, packages resources, produces DEX, aligns and signs the APK, then verifies the signature. Test tools and fixtures are not included in the APK. `.toolchain/`, generated `build/`, signing keys and credentials are ignored by Git.
 
-`android-tests/` is a separate, test-only instrumentation package. It exercises real Android multi-pointer events against the production BattleView and captures native Canvas pixels. V12 checks its three redesigned screens at four display configurations in all three languages. Its APK is never part of the game's distribution.
+`android-tests/` is a separate, test-only instrumentation package. Its harness exercises real Android multi-pointer events against the production BattleView and captures native Canvas pixels, including V12 screens at four display configurations in all three languages. It has not run against the current source update. Its APK is never part of the game's distribution. `DocsVersionTest` checks designated current version fields without treating historical release reports as current evidence.
 
 `app/` and root Gradle files contain Android. `ios/` and `backend/` are reserved, unimplemented folders in this monorepo. An iOS port can reuse assets, campaign content and specifications, but native Java does not directly compile for iOS. Future online services must be optional so offline play remains available.
 

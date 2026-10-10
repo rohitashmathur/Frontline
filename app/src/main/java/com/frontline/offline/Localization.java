@@ -516,6 +516,10 @@ public final class Localization {
         add("playtest.about_right", "About right", "Pas", "ठीक लगा");
         add("playtest.too_hard", "Too hard", "Terlalu sulit", "बहुत कठिन");
         add("playtest.not_now", "Not now", "Nanti", "अभी नहीं");
+        add("playtest.entries", "Entries {count} / {limit}", "Entri {count} / {limit}", "प्रविष्टियाँ {count} / {limit}");
+        add("playtest.log_warning", "Log almost full", "Log hampir penuh", "लॉग लगभग भर गया है");
+        add("playtest.log_full", "Log full / oldest events are replaced", "Log penuh / peristiwa terlama diganti", "लॉग भर गया / सबसे पुराने रिकॉर्ड बदल दिए जाएँगे");
+        add("playtest.export_reminder", "Export and clear before the next session.", "Ekspor lalu hapus sebelum sesi berikutnya.", "अगले सत्र से पहले निर्यात करें और लॉग साफ़ करें।");
     }
 
     private static void commandDeck() {
@@ -523,6 +527,12 @@ public final class Localization {
         add("deck.chapter", "Chapter {chapter} of {total}", "Bab {chapter} dari {total}", "अध्याय {chapter} / {total}");
         add("deck.sector", "Sector {sector} of {total}", "Sektor {sector} dari {total}", "सेक्टर {sector} / {total}");
         add("deck.run_battle", "Battle {battle} of 5", "Pertempuran {battle} dari 5", "लड़ाई {battle} / 5");
+        add("deck.run_last", "Last run: {cleared} / {total} cleared", "Terakhir: {cleared} / {total} selesai", "पिछली शृंखला: {cleared} / {total} जीतीं");
+        add("deck.daily_available", "Available", "Tersedia", "उपलब्ध");
+        add("deck.daily_done", "Completed", "Selesai", "पूरी हुई");
+        add("deck.daily_resets", "resets in {hours}h {minutes}m", "berganti dalam {hours}j {minutes}m", "{hours} घंटे {minutes} मिनट में बदलेगी");
+        add("deck.daily_minutes", "resets in {minutes}m", "berganti dalam {minutes}m", "{minutes} मिनट में बदलेगी");
+        add("deck.daily_label", "Daily Mission / {state} / {reset}", "Misi Harian / {state} / {reset}", "दैनिक मिशन / {state} / {reset}");
         add("deck.in_progress", "Battle in progress", "Pertempuran berlangsung", "लड़ाई जारी है");
         add("deck.ready", "Ready to play", "Siap bermain", "खेलने के लिए तैयार");
         add("deck.coverage", "Coverage {value}%", "Penguasaan {value}%", "नियंत्रण {value}%");
@@ -533,8 +543,10 @@ public final class Localization {
         add("deck.more", "More", "Lainnya", "और");
         add("deck.cleared", "{count} / {total} cleared", "{count} / {total} selesai", "{count} / {total} पूरे");
         add("deck.best", "Cleared / best {score}", "Selesai / terbaik {score}", "पूरा / सर्वश्रेष्ठ {score}");
-        add("deck.legacy", "Cleared / Legacy {score}", "Selesai / Lama {score}", "पूरा / पुराना {score}");
-        add("deck.historical", "Cleared / Historical {score}", "Selesai / Historis {score}", "पूरा / ऐतिहासिक {score}");
+        add("deck.legacy", "Cleared / previous rules {score}", "Selesai / aturan sebelumnya {score}", "पूरा / पिछले नियमों में {score}");
+        add("deck.historical", "Cleared / previous rules {score}", "Selesai / aturan sebelumnya {score}", "पूरा / पिछले नियमों में {score}");
+        add("deck.best_total", "Best total {score}", "Total terbaik {score}", "सर्वश्रेष्ठ कुल {score}");
+        add("deck.progress_label", "Campaign progress / {cleared} of {total} cleared / best total {score}", "Progres kampanye / {cleared} dari {total} selesai / total terbaik {score}", "अभियान प्रगति / {total} में से {cleared} पूरे / सर्वश्रेष्ठ कुल {score}");
         add("deck.continue_sector", "Continue sector {sector}", "Lanjutkan sektor {sector}", "सेक्टर {sector} जारी रखें");
         add("deck.play_sector", "Play sector {sector}", "Mainkan sektor {sector}", "सेक्टर {sector} खेलें");
         add("deck.choose_sector", "Select an unlocked sector", "Pilih sektor yang terbuka", "खुला सेक्टर चुनें");

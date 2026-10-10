@@ -133,6 +133,10 @@ public final class MainActivity extends Activity {
             }
         };
 
+        private final Runnable refreshHome = new Runnable() {
+            @Override public void run() { if (running && scene.overlay == GameScene.MENU) invalidate(); }
+        };
+
         BattleView(Context context) {
             super(context);
             setFocusable(true);
@@ -212,6 +216,7 @@ public final class MainActivity extends Activity {
         void stop() {
             running = false; scene.pause(); handler.removeCallbacks(tooltip); save();
             if (audio != null) audio.stopTone();
+            handler.removeCallbacks(refreshHome);
             music.pause();
         }
         void resume() { running = true; previousFrame = 0; music.resume(); handler.post(showBattleFeedback); invalidate(); }
@@ -219,6 +224,7 @@ public final class MainActivity extends Activity {
             if (unlockDialog != null) unlockDialog.dismiss();
             if (feedbackDialog != null) feedbackDialog.dismiss();
             pendingFeedbackAttemptId = null; handler.removeCallbacks(showBattleFeedback);
+            handler.removeCallbacks(refreshHome);
             handler.removeCallbacks(tooltip); music.dispose(); if (audio != null) audio.release();
         }
 
@@ -237,6 +243,9 @@ public final class MainActivity extends Activity {
             scene.render(this,availableHeight/scale);
             frame.restore();
             if (now-lastSave > 15_000_000_000L) { save(); lastSave = now; }
+            handler.removeCallbacks(refreshHome);
+            if (running && scene.overlay == GameScene.MENU)
+                handler.postDelayed(refreshHome,60_000-Math.floorMod(System.currentTimeMillis(),60_000));
             if (running && scene.needsAnimation()) postInvalidateOnAnimation();
         }
 
