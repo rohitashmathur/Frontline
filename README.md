@@ -1,18 +1,28 @@
 # Frontline
 
-An original offline Android territory-conquest game. **V13 / 0.13.0** improves localized rendering, makes Home non-scrolling, expands tablet battlefields and gates first-time mode entry through the skippable tutorial. It retains 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, five-battle Classic runs and three experimental routed maps. Difficulty-specific records, mastery rewards, music and saved battles remain unchanged. English, Bahasa Indonesia and Hindi are bundled offline. No login, backend, network permission, ads or remote telemetry.
+An original offline Android territory-conquest game. **V13.1 / 0.13.1** adds illustrated Attempt and Field Manual tabs, improves Home action spacing and changes the tagline to Measured Tactics. It retains V13's localized rendering improvements, non-scrolling Home, tablet battlefields and skippable first-mode tutorial. The game includes 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, five-battle Classic runs and three experimental routed maps. Difficulty-specific records, mastery rewards, music and saved battles remain unchanged. English, Bahasa Indonesia and Hindi are bundled offline. No login, backend, network permission, ads or remote telemetry.
 
-Current source version: `0.13.0` (version code `15`).
+Current source version: `0.13.1` (version code `16`).
 
-**Verification:** see [V13 verification](docs/verification-v13.md) for current results and remaining device work. The preserved 0.12.2 report records 931,470 portable and 153,977 native checks. Automated results do not establish physical-phone comfort, fluent translation quality or enjoyment.
+**Source-only update:** 0.13.1 has not been compiled, tested or packaged, as requested. See its [verification status](docs/verification-v13-1.md). The last verified build is [0.13.0](docs/verification-v13.md); those results do not verify these new changes. Automated results do not establish physical-phone comfort, fluent translation quality or enjoyment.
 
 ## Install
 
-Android 7.0 or newer is required. The V13 local testing build is `build/FrontlineV13.apk`; the build script also produces `build/Frontline-debug.apk`. Historical versioned APKs are preserved separately. No new GitHub release asset is published. The [historical V11 test release](https://github.com/rohitashmathur/Frontline/releases/tag/v0.11.0) remains available. This is a debug-signed prototype, not a Play Store release.
+Android 7.0 or newer is required. No 0.13.1 APK has been generated. The last verified V13 / 0.13.0 local testing build is `build/FrontlineV13.apk`; the build script also produces `build/Frontline-debug.apk`. Historical versioned APKs are preserved separately. No new GitHub release asset is published. The [historical V11 test release](https://github.com/rohitashmathur/Frontline/releases/tag/v0.11.0) remains available. This is a debug-signed prototype, not a Play Store release.
 
 For an existing debug build signed with the original prototype key, install over V7, V6 or V5 to retain local progress; do not uninstall first. Package identity is unchanged. Legacy scores have unknown attempt difficulty; the current Campaign UI labels old scores as previous-rules records rather than comparable current bests. Existing overfilled V5 garrisons are clamped to the 100/125 limits, while armies already in flight retain their units.
 
-## V13
+## V13.1 (Source Only)
+
+- Attempt briefing uses Battle, Objective and Opponents tabs, an actual-layout preview, objective diagrams, personal records, campaign star targets and faction/ruler details. Start Attempt and Back remain fixed; the preview never replaces the live battle.
+- Field Manual uses Combat, Kings and Modes tabs with battlefield illustrations, replayable one-for-one interception, tappable deployment percentages/counts and captured-king growth examples. Existing scoring, resignation, mode and routed-map rules are retained.
+- How to Play practice opened from the manual returns there on completion or Skip. Demo controls do not change the live model or progression.
+- Home reserves a 14-unit gap between coverage and Play/Continue in regular and compact layouts. Very short windows retain the non-scrolling More fallback.
+- Branding now reads Measured Tactics in all three bundled languages. Version footer: `0.13.1`; V7's exact `12345` unlock remains unchanged.
+
+See [source-only release notes](docs/release-v13-1.md) and [pending verification](docs/verification-v13-1.md). No tests, preview renders, APK builds or new screenshot captures were run for this patch.
+
+## V13 (Previous Verified Build)
 
 - Bounded per-thread translation recognition cache, constant-text fast path, precompiled percentage recognition and a bounded native text-width cache. No change to translated meanings or battle rules.
 - Home fits without scrolling. Campaign progress and best total sit above bottom shortcuts; compact windows use a three-mode row. Very short/enlarged-display windows use a bottom More entry for secondary modes/shortcuts and, when necessary, Daily.
@@ -22,7 +32,7 @@ For an existing debug build signed with the original prototype key, install over
 - [Playtest kit](docs/playtest-kit-v13.md) and [CSV summary tool](docs/playtest-summary-v13.md) support observed anonymous sessions, repeated-export deduplication and honest incomplete-attempt reporting.
 - Exact V7 `12345` unlock behavior remains available in this testing prototype. Public-release feature gating, licensing and release signing remain separate decisions.
 
-See [release notes](docs/release-v13.md), [verification](docs/verification-v13.md) and [screenshots](docs/screenshots.md). Development stops after this V13 commit and push.
+See historical [release notes](docs/release-v13.md), [verification](docs/verification-v13.md) and [screenshots](docs/screenshots.md).
 
 ## Historical V12 Step 2
 
@@ -88,8 +98,10 @@ Settings now includes **Enter Code**. Enter exactly `12345` and select Unlock (o
 ## Documentation
 
 - [Application Architecture and Flow Diagrams](docs/architecture.md)
-- [V13 Release / Current Source](docs/release-v13.md)
-- [V13 Verification](docs/verification-v13.md)
+- [V13.1 Release / Current Source](docs/release-v13-1.md)
+- [V13.1 Pending Verification](docs/verification-v13-1.md)
+- [Previous Verified V13 Release](docs/release-v13.md)
+- [Previous V13 Verification](docs/verification-v13.md)
 - [V13 Observed Playtest Kit](docs/playtest-kit-v13.md)
 - [Offline CSV Summary Tool](docs/playtest-summary-v13.md)
 - [Historical V12 Step 2 Release](docs/release-v12-step2.md)
@@ -106,7 +118,7 @@ Settings now includes **Enter Code**. Enter exactly `12345` and select Unlock (o
 - [V10 Acceptance and Verification](docs/verification-v10.md)
 - [Native Android Screenshots](docs/screenshots.md)
 
-Current **0.13.0** native screenshots below use deterministic staged data, not organically won battles. Older galleries remain separately labelled in the screenshot documentation.
+The **0.13.0** native screenshots below use deterministic staged data, not organically won battles. They predate the 0.13.1 illustrated screens and spacing changes; no new captures were made for this source-only update. Older galleries remain separately labelled in the screenshot documentation.
 
 <img src="docs/screenshots/v13/home.png" width="220" alt="0.13.0 non-scrolling native Home fixture" /> <img src="docs/screenshots/v13/campaign.png" width="220" alt="0.13.0 native campaign trail fixture" /> <img src="docs/screenshots/v13/settings-on.png" width="220" alt="0.13.0 native settings with audio and haptics on" />
 
@@ -154,7 +166,7 @@ Alternatively, open the Gradle project in Android Studio using Java 17, Android 
 
 ## Verification
 
-The current portable suite, CSV tool tests and V13 native suite passed on 2026-10-11; see the [0.13.0 report](docs/verification-v13.md) for per-suite counts, native results, APK checksum and exact remaining checks. Not every historical script below was rerun. Historical assertion totals, APK checksums and screenshots remain in their original versioned reports.
+No tests or builds were run for current source **0.13.1**. The portable suite, CSV tool tests and V13 native suite previously passed for **0.13.0** on 2026-10-11; see the [historical report](docs/verification-v13.md) for per-suite counts, native results, APK checksum and exact remaining checks. Not every historical script below was rerun. Historical assertion totals, APK checksums and screenshots remain in their original versioned reports.
 
 The portable suite is designed to cover all 60 maps on all three difficulties, dispatch, production/caps, capture/reinforcement, swept interception, packet accounting, corruption recovery, V4/V5 migration, six-team saves, held-king milestones, guarded resignation, AI reserves/recovery/coordination, progression, tutorial and camera input. Java2D renders the same scene commands at compact, tall and tablet sizes and checks text bounds. Current release metadata is checked against AppVersion, both build paths and designated current-document metadata; historical reports are intentionally excluded.
 

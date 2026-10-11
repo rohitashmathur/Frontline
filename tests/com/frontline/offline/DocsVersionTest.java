@@ -21,13 +21,13 @@ public final class DocsVersionTest {
         String build = read(root,"scripts/build-android.ps1");
         check(one(build,"'--version-name','([^']+)'",1).equals(AppVersion.NAME),"Local build version name");
         check(one(build,"'--version-code','([0-9]+)'",1).equals(Integer.toString(AppVersion.CODE)),"Local build version code");
-        for (String file : new String[] {"README.md","docs/architecture.md","docs/release-v13.md","docs/verification-v13.md"}) {
+        for (String file : new String[] {"README.md","docs/architecture.md","docs/release-v13-1.md","docs/verification-v13-1.md"}) {
             String doc = read(root,file);
             String metadata = "(?m)^Current source version: `([^`]+)` \\(version code `([0-9]+)`\\)\\.$";
             check(one(doc,metadata,1).equals(AppVersion.NAME),file+" current version");
             check(one(doc,metadata,2).equals(Integer.toString(AppVersion.CODE)),file+" current code");
         }
-        check(one(read(root,"docs/release-v13.md"),"\\A# V13 / ([^\\r\\n]+)",1).equals(AppVersion.NAME),"Current release heading");
+        check(one(read(root,"docs/release-v13-1.md"),"\\A# V13.1 / ([^\\r\\n]+)",1).equals(AppVersion.NAME),"Current release heading");
         System.out.println("PASS: "+checks+" current release metadata checks.");
     }
     private static String read(Path root,String file) throws Exception {

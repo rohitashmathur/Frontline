@@ -57,6 +57,7 @@ public final class Localization {
         laterModes();
         commandDeck();
         playtestFeedback();
+        illustratedPages();
         for (Map.Entry<String, String> entry : CATALOGS.get("en").entrySet()) {
             String key = entry.getKey(), english = entry.getValue();
             if (FIELDS.get(key).isEmpty()) {
@@ -260,9 +261,75 @@ public final class Localization {
         }
     }
 
+    private static void illustratedPages() {
+        add("manual.combat", "Combat", "Tempur", "युद्ध");
+        add("manual.kings", "Kings", "Raja", "राजा");
+        add("manual.modes", "Modes", "Mode", "मोड");
+        add("manual.battle", "Battle", "Pertempuran", "लड़ाई");
+        add("manual.objective", "Objective", "Tujuan", "लक्ष्य");
+        add("manual.opponents", "Opponents", "Lawan", "प्रतिद्वंद्वी");
+        add("manual.practice", "Practice in How to Play", "Berlatih di Cara Bermain", "कैसे खेलें में अभ्यास करें");
+        add("manual.combat_title", "Armies meet. Troops cancel.", "Pasukan bertemu. Saling mengurangi.", "सेनाएँ मिलें, सैनिक घटें।");
+        add("manual.combat_intro", "Hostile troops crossing in flight cancel one-for-one. Friendly armies pass through.", "Pasukan musuh yang berpapasan saling mengurangi satu banding satu. Pasukan sekutu lewat tanpa bentrok.", "रास्ते में विरोधी सैनिक एक के बदले एक घटते हैं। मित्र सेनाएँ बिना टकराव आगे बढ़ती हैं।");
+        add("manual.before", "BEFORE INTERCEPTION", "SEBELUM BENTROK", "टकराव से पहले");
+        add("manual.after", "AFTER INTERCEPTION", "SETELAH BENTROK", "टकराव के बाद");
+        add("manual.collision_example", "20 sent / 30 approaching", "20 dikirim / 30 mendekat", "20 भेजे / 30 सामने से आए");
+        add("manual.collision_result", "10 enemy troops continue", "10 pasukan musuh melanjutkan", "10 दुश्मन सैनिक आगे बढ़ते हैं");
+        add("manual.resolve", "Show interception", "Lihat bentrok", "टकराव देखें");
+        add("manual.replay", "Replay example", "Ulangi contoh", "उदाहरण फिर देखें");
+        add("manual.deployment", "Choose how much to send", "Pilih jumlah yang dikirim", "कितने सैनिक भेजने हैं");
+        add("manual.deployment_count", "From 40 troops: send {sent} / keep {left}", "Dari 40 pasukan: kirim {sent} / simpan {left}", "40 सैनिकों में से: भेजें {sent} / रखें {left}");
+        add("manual.fraction_label", "Send {percent}% / {troops} troops", "Kirim {percent}% / {troops} pasukan", "भेजें {percent}% / {troops} सैनिक");
+        add("manual.capture", "Capture territory", "Rebut wilayah", "क्षेत्र पर कब्ज़ा");
+        add("manual.capture_detail", "Outnumber the defenders to capture a tile. Surviving attackers become its garrison.", "Kalahkan jumlah pembela untuk merebut petak. Penyerang yang tersisa menjadi garnisunnya.", "कब्ज़े के लिए रक्षकों से अधिक सैनिक पहुँचाएँ। बचे हमलावर उस क्षेत्र की सेना बनते हैं।");
+        add("manual.reinforce", "Reinforce your front", "Perkuat garis depan", "मोर्चे को मज़बूत करें");
+        add("manual.reinforce_detail", "Sending to a friendly tile adds troops. Sending 100% leaves no defenders at the source.", "Mengirim ke petak sekutu menambah pasukan. Mengirim 100% tidak menyisakan pembela di asal.", "मित्र क्षेत्र में भेजने से सैनिक जुड़ते हैं। 100% भेजने पर मूल क्षेत्र में कोई रक्षक नहीं बचता।");
+        add("manual.travel", "Classic troop travel", "Perjalanan pasukan Klasik", "पारंपरिक सैनिक यात्रा");
+        add("manual.king_title", "Hold kings. Grow together.", "Kuasai raja. Tumbuh bersama.", "राजा रखें, पूरी सेना बढ़ाएँ।");
+        add("manual.king_intro", "Captured enemy kings boost production across your whole team only while you hold them.", "Raja musuh yang direbut meningkatkan produksi seluruh tim hanya selama dikuasai.", "कब्ज़ाए दुश्मन राजा केवल आपके कब्ज़े में रहने तक पूरी टीम की सैनिक वृद्धि बढ़ाते हैं।");
+        add("manual.boost_value", "{boost}x", "{boost}x", "{boost}x");
+        add("manual.held_count", "Captured enemy kings held: {count}", "Raja musuh yang dikuasai: {count}", "कब्ज़े में दुश्मन राजा: {count}");
+        add("manual.gain", "Capture king", "Rebut raja", "राजा कब्ज़ाएँ");
+        add("manual.lose", "Lose king", "Kehilangan raja", "राजा खोएँ");
+        add("manual.milestones", "Growth milestones", "Tahap pertumbuhan", "वृद्धि के पड़ाव");
+        add("manual.team_boost", "A team-wide advantage", "Keunggulan seluruh tim", "पूरी टीम का लाभ");
+        add("manual.team_boost_detail", "Your starting king never counts. Losing a captured king reduces the boost. After four kings (3x), each extra king multiplies growth by 1.2.", "Raja awal tidak dihitung. Kehilangan raja rampasan mengurangi bonus. Setelah empat raja (3x), tiap raja tambahan mengalikan pertumbuhan dengan 1.2.", "शुरुआती राजा नहीं गिना जाता। कब्ज़ाया राजा खोने पर लाभ घटता है। चार राजा (3x) के बाद हर अतिरिक्त राजा वृद्धि को 1.2 से गुणा करता है।");
+        add("manual.caps", "Garrisons have limits", "Garnisun memiliki batas", "सेना की सीमा");
+        add("manual.caps_detail", "Normal tiles: 100. King tiles: 125. Extra reinforcements are discarded. A Classic Run king-cap perk can raise your king limit by 15.", "Petak biasa: 100. Petak raja: 125. Bantuan berlebih dibuang. Perk kapasitas raja di Run Klasik dapat menambah batas rajamu sebesar 15.", "सामान्य क्षेत्र: 100। राजा क्षेत्र: 125। अतिरिक्त मदद के सैनिक नष्ट होते हैं। पारंपरिक श्रृंखला का राजा-सीमा लाभ आपकी सीमा 15 बढ़ा सकता है।");
+        add("manual.king_speed", "Kings produce faster", "Raja menghasilkan lebih cepat", "राजा क्षेत्र तेज़ी से बढ़ते हैं");
+        add("manual.king_speed_detail", "King territories produce troops faster than normal territories, before held-king bonuses.", "Wilayah raja menghasilkan pasukan lebih cepat daripada wilayah biasa, sebelum bonus raja rampasan.", "कब्ज़ाए राजा के लाभ से पहले भी राजा क्षेत्र सामान्य क्षेत्रों से तेज़ सैनिक बनाते हैं।");
+        add("manual.modes_title", "One battlefield. Different goals.", "Satu medan. Beragam tujuan.", "एक मैदान, अलग लक्ष्य।");
+        add("manual.modes_intro", "Campaign progress, mission records, Classic Runs and Frontier Lab remain separate.", "Progres kampanye, rekor misi, Run Klasik, dan Lab Perbatasan tetap terpisah.", "अभियान की प्रगति, मिशन रिकॉर्ड, पारंपरिक श्रृंखला और सीमांत प्रयोगशाला अलग रहते हैं।");
+        add("manual.run", "Five battles, four choices", "Lima pertempuran, empat pilihan", "पाँच लड़ाइयाँ, चार चुनाव");
+        add("manual.run_detail", "Choose one non-stacking perk between battles. One same-seed retry is available per run. Restarting a run battle counts as defeat.", "Pilih satu perk tanpa penumpukan di antara pertempuran. Satu percobaan ulang dengan seed yang sama tersedia tiap run. Memulai ulang pertempuran run dihitung kalah.", "लड़ाइयों के बीच एक बिना दोहराव का लाभ चुनें। हर श्रृंखला में उसी प्रारंभिक स्थिति से एक पुनः प्रयास मिलता है। श्रृंखला की लड़ाई फिर शुरू करना हार गिना जाता है।");
+        add("manual.budget_detail", "Win within the deployment allowance. Friendly reinforcements count too; exceeding it fails the mission.", "Menang dalam batas pengiriman. Bantuan ke sekutu juga dihitung; melampaui batas menggagalkan misi.", "सैनिक भेजने की सीमा में जीतें। मित्र क्षेत्र की मदद भी गिनी जाती है; सीमा पार करने पर मिशन असफल है।");
+        add("manual.hold_detail", "Hold the marked enemy king continuously for the mission timer. Losing it resets the timer.", "Kuasai raja musuh bertanda terus-menerus selama waktu misi. Kehilangannya mengulang penghitung waktu.", "मिशन के तय समय तक चिह्नित दुश्मन राजा लगातार रखें। उसे खोने पर समय फिर शुरू होता है।");
+        add("manual.keep_detail", "Keep your starting king for the mission duration. Losing it even once fails the mission.", "Pertahankan raja awal selama durasi misi. Kehilangannya sekali saja menggagalkan misi.", "मिशन की अवधि तक शुरुआती राजा रखें। उसे एक बार भी खोने पर मिशन असफल होता है।");
+        add("manual.daily_detail", "A date-seeded mission on fixed Normal difficulty. Resets at 00:00 UTC; a saved attempt keeps its original date.", "Misi dengan seed tanggal dan kesulitan Normal tetap. Berganti pukul 00:00 UTC; percobaan tersimpan mempertahankan tanggal awal.", "तारीख पर आधारित मिशन, निश्चित सामान्य कठिनाई। 00:00 UTC पर बदलता है; सहेजे प्रयास की मूल तारीख बनी रहती है।");
+        add("manual.lab_title", "Frontier Lab / routed battles", "Lab Perbatasan / pertempuran rute", "सीमांत प्रयोगशाला / मार्ग की लड़ाइयाँ");
+        add("manual.route_caption", "Friendly route / final hostile tile", "Rute sekutu / petak musuh terakhir", "मित्र मार्ग / अंतिम दुश्मन क्षेत्र");
+        add("manual.surrender", "When rivals resign", "Saat rival menyerah", "प्रतिद्वंद्वी कब हार मानते हैं");
+        add("manual.surrender_detail", "In Classic battles, hold over 90% of the map for ten active seconds. A rival resigns only if its garrisons and troops in flight cannot recapture a tile.", "Dalam pertempuran Klasik, kuasai lebih dari 90% peta selama sepuluh detik aktif. Rival menyerah hanya jika garnisun dan pasukan di perjalanan tidak dapat merebut petak.", "पारंपरिक लड़ाई में दस सक्रिय सेकंड तक 90% से अधिक क्षेत्र रखें। प्रतिद्वंद्वी तभी हार मानता है जब उसकी सेना और रास्ते के सैनिक कोई क्षेत्र वापस न ले सकें।");
+        add("manual.records", "Stars and personal records", "Bintang dan rekor pribadi", "सितारे और निजी रिकॉर्ड");
+        add("manual.records_detail", "Campaign: three stars at or below par, two at or below 1.6x par. Mission records follow their objective. Legacy scores have unknown historical difficulty.", "Kampanye: tiga bintang sesuai atau di bawah par, dua sesuai atau di bawah 1.6x par. Rekor misi mengikuti tujuan. Kesulitan historis skor lama tidak diketahui.", "अभियान: तय समय तक तीन सितारे, उसके 1.6 गुने तक दो। मिशन रिकॉर्ड लक्ष्य पर आधारित हैं। पुराने स्कोर की कठिनाई अज्ञात है।");
+        add("manual.score", "Campaign scoring", "Skor kampanye", "अभियान का स्कोर");
+        add("manual.score_detail", "1000 + 50 per capture + time bonus (up to 1200, minus 6 per second) + 250 per difficulty step.", "1000 + 50 per perebutan + bonus waktu (hingga 1200, dikurangi 6 per detik) + 250 per tingkat kesulitan.", "1000 + हर कब्ज़े पर 50 + समय लाभ (अधिकतम 1200, हर सेकंड 6 कम) + कठिनाई के हर स्तर पर 250।");
+        add("manual.preview", "BATTLEFIELD PREVIEW", "PRATINJAU MEDAN", "युद्धक्षेत्र की झलक");
+        add("manual.battlefield", "Your battlefield", "Medan pertempuranmu", "आपका युद्धक्षेत्र");
+        add("manual.map_stats", "{tiles} territories / {rivals} opponents", "{tiles} wilayah / {rivals} lawan", "{tiles} क्षेत्र / {rivals} प्रतिद्वंद्वी");
+        add("manual.preview_note", "Layout preview; neutral armies vary between new attempts.", "Pratinjau tata letak; pasukan netral bervariasi antar percobaan baru.", "मानचित्र की झलक; नए प्रयासों में तटस्थ सेनाओं की संख्या बदलती है।");
+        add("manual.record_title", "Your record", "Rekormu", "आपका रिकॉर्ड");
+        add("manual.star_targets", "Star targets", "Target bintang", "सितारों के लक्ष्य");
+        add("manual.win", "Win condition", "Syarat menang", "जीत की शर्त");
+        add("manual.watch", "Keep in mind", "Perlu diingat", "ध्यान रखें");
+        add("manual.rules_link", "Combat, king growth and mode rules are available in the Field Manual.", "Aturan tempur, pertumbuhan raja, dan mode tersedia di Panduan Lapangan.", "युद्ध, राजा से वृद्धि और मोड के नियम युद्ध पुस्तिका में हैं।");
+        add("manual.equal_start", "All teams start with equal armies", "Semua tim memulai dengan pasukan setara", "शुरू में सभी टीमों की सेना बराबर है");
+        add("manual.open", "Open Field Manual", "Buka Panduan Lapangan", "युद्ध पुस्तिका खोलें");
+    }
+
     private static void ui() {
         add("brand", "FRONTLINE", "FRONTLINE", "FRONTLINE");
-        add("brand.tagline", "OFFLINE TACTICS", "TAKTIK OFFLINE", "ऑफ़लाइन रणनीति");
+        add("brand.tagline", "MEASURED TACTICS", "TAKTIK TERUKUR", "सोची-समझी रणनीति");
         add("settings.title", "Settings", "Pengaturan", "सेटिंग्स");
         add("settings.language", "Language / Bahasa / भाषा", "Language / Bahasa / भाषा", "Language / Bahasa / भाषा");
         add("language.en", "English", "English", "English");

@@ -79,7 +79,7 @@ final class CommandScreens {
     void home(Graphics g,Controls controls,GameModel model,boolean active,long now,float height,float minTouch) {
         touch = Math.max(64,minTouch); header(g,controls,"",true,true);
         float dailyY = 18+touch;
-        boolean shortWindow = height-40-(28+2*touch) < 86+3*touch+30;
+        boolean shortWindow = height-40-(28+2*touch) < 105+3*touch+42;
         boolean done = profile.progress.dailyCompleted(Challenge.date(now),1,Challenge.DAILY_VERSION,GameModel.RULES_VERSION,Challenge.CONFIG_VERSION);
         String dailyState = tr(done ? "deck.daily_done" : "deck.daily_available");
         String reset = dailyReset(now);
@@ -95,12 +95,12 @@ final class CommandScreens {
         float shortcuts = ((5+columns-1)/columns)*(touch+20);
         float headerHeight = shortWindow ? dailyY+10 : dailyY+touch+10;
         float available = height-40-headerHeight;
-        float normalHeight = 138+touch+Math.max(104,touch)+Math.max(74,touch)+Math.max(80,touch)+shortcuts+58;
+        float normalHeight = 152+touch+Math.max(104,touch)+Math.max(74,touch)+Math.max(80,touch)+shortcuts+58;
         boolean compact = normalHeight > available;
         float progressHeight = Math.max(compact ? 64 : 80,touch);
         float modeHeight = Math.max(compact ? 72 : 104,touch), labHeight = Math.max(74,touch);
-        boolean overflow = shortWindow || compact && 96+touch+modeHeight+progressHeight+shortcuts+44 > available;
-        float actionY = compact ? overflow ? 86 : 96 : 138;
+        boolean overflow = shortWindow || compact && 105+touch+modeHeight+progressHeight+shortcuts+44 > available;
+        float actionY = compact ? 105 : 152;
         float modeY = actionY+touch+8, labY = modeY+modeHeight+10;
         float shortcutY = available-(overflow ? touch : shortcuts)-6;
         float progressY = shortcutY-progressHeight-18;
@@ -358,7 +358,7 @@ final class CommandScreens {
         text(g,label,57,y(row+touch/2+5),14,210,WHITE,false,0);
         text(g,value,373,y(row+touch/2+5),12,125,MUTED,false,2); chevron(g,389,y(row+touch/2),MUTED);
     }
-    private static void preview(Graphics g,GameModel model,float x,float y,float w,float h) {
+    static void preview(Graphics g,GameModel model,float x,float y,float w,float h) {
         float minX = Float.MAX_VALUE,maxX = -Float.MAX_VALUE,minY = Float.MAX_VALUE,maxY = -Float.MAX_VALUE;
         for (GameModel.Territory t : model.territories) { minX = Math.min(minX,t.x-.866f); maxX = Math.max(maxX,t.x+.866f); minY = Math.min(minY,t.y-1); maxY = Math.max(maxY,t.y+1); }
         float scale = Math.min(w/(maxX-minX),h/(maxY-minY)),left = x+(w-(maxX-minX)*scale)/2,top = y+(h-(maxY-minY)*scale)/2;
@@ -378,7 +378,7 @@ final class CommandScreens {
     }
     private static int mix(int a,int b,float amount) { int result = 0xff000000; for (int shift : new int[] {0,8,16}) result |= (int)(((a>>shift)&255)*(1-amount)+((b>>shift)&255)*amount)<<shift; return result; }
     private static void chevron(Graphics g,float x,float y,int color) { g.line(x-3,y-5,x+3,y,1.7f,color); g.line(x+3,y,x-3,y+5,1.7f,color); }
-    private static void icon(Graphics g,String id,float x,float y,int c) {
+    static void icon(Graphics g,String id,float x,float y,int c) {
         if (id.equals("settings")) { g.circle(x,y,10,c); g.circle(x,y,6,PANEL); g.circle(x,y,2,c); for (int i = 0; i < 8; i++) { double a = i*Math.PI/4; g.line(x+(float)Math.cos(a)*10,y+(float)Math.sin(a)*10,x+(float)Math.cos(a)*14,y+(float)Math.sin(a)*14,3,c); } }
         else if (id.equals("back") || id.equals("next")) { float d = id.equals("back") ? -1 : 1; g.line(x-d*8,y,x+d*8,y,2,c); g.line(x+d*8,y,x,y-8,2,c); g.line(x+d*8,y,x,y+8,2,c); }
         else if (id.equals("sectors")) g.polygon(hex(x,y,12),0,c,2);

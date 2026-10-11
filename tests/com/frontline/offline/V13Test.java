@@ -11,7 +11,7 @@ public final class V13Test {
     };
     public static void main(String[] args) throws Exception {
         homeFits(); moreDetails(); tutorialGate(); translationCache(); tablets();
-        check(AppVersion.NAME.equals("0.13.0") && AppVersion.CODE == 15,"V13 identity");
+        check(AppVersion.NAME.equals("0.13.1") && AppVersion.CODE == 16,"V13.1 identity");
         System.out.println("PASS: "+checks+" V13 layout, onboarding and localization checks.");
     }
     private static void homeFits() throws Exception {

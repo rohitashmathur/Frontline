@@ -60,7 +60,7 @@ public final class V12ScreensTest {
             GameScene s = new GameScene(p,m,EVENTS); s.back(); byte[] before = m.save();
             press(s,"resume",780); check(s.overlay == GameScene.NONE && Arrays.equals(before,m.save()),"Command Deck resumes each actual battle mode");
         }
-        check(AppVersion.NAME.equals("0.13.0") && AppVersion.CODE == 15,"V13 release number");
+        check(AppVersion.NAME.equals("0.13.1") && AppVersion.CODE == 16,"V13.1 release number");
         System.out.println("PASS: "+checks+" V12 screen checks.");
     }
     private static final class Capture implements CommandScreens.Controls {

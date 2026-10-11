@@ -1,12 +1,14 @@
-# Frontline Architecture (V13)
+# Frontline Architecture (V13.1)
 
-Current source version: `0.13.0` (version code `15`).
+Current source version: `0.13.1` (version code `16`).
 
-Frontline is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in. V13 adds bounded localization/text measurement caches, a non-scrolling responsive Home, shared tablet viewport sizing, a full-height right-hand battlefield on wide tablets, and a first-mode tutorial continuation gate. V11 battle rules, records and binary saves remain in force. See [V13 verification](verification-v13.md); historical reports/screenshots preserve their version identities.
+Frontline is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in. V13 added bounded localization/text measurement caches, a non-scrolling responsive Home, shared tablet viewport sizing, a full-height right-hand battlefield on wide tablets, and a first-mode tutorial continuation gate. V13.1 adds illustrated briefing/manual tabs, isolated interactive rule examples and coverage-to-action spacing. V11 battle rules, records and binary saves remain in force. This patch is source-only and untested; see [its status](verification-v13-1.md). [V13 verification](verification-v13.md) and historical screenshots preserve their original version identities.
 
 `Viewport` controls native scale, density-aware touch size and logical battlefield width. Menus stay in a constrained 420-unit column. Tablet maps expand without enlarging every control; wide tablet battles shift the HUD and its touch/accessibility coordinates together. `Localization` bounds recognition caches to 2,048 entries per thread and clears on a catalog change; `BattleView` bounds text-width measurements to 1,024 entries. The first-mode tutorial retains only a transient intended command; no game starts until tutorial completion/skip, and Back does not mark tutorial seen. Existing `tutorial-seen` preferences remain the persistence contract.
 
 The offline Python [playtest summary tool](playtest-summary-v13.md) reads manual CSV exports; it is not packaged in the app and sends nothing over the network.
+
+`IllustratedScreens` owns the Attempt and Field Manual presentation, transient tab/scroll/demo state and a cached read-only preview model. It registers controls through the same scene/accessibility adapter as `CommandScreens`. Fixed headers, tabs and bottom actions surround a clipped, scrollable body; wrapping uses the selected language's actual text measurements. Demo fractions, interception and king counts are transient, not saved battle data. Starting an attempt still goes through `GameScene`'s existing replacement confirmation; Daily retains the date captured when its briefing was opened. Manual practice returns to the manual and never advances the live battle.
 
 ## Components
 
@@ -16,6 +18,7 @@ flowchart LR
     View[BattleView / Canvas and touch adapter]
     Scene[GameScene / screens, gestures, camera and HUD]
     Command[CommandScreens / cached deck, vertical trail, settings and scroll]
+    Illustrated[IllustratedScreens / tabbed briefing, manual and isolated demos]
     Model[GameModel / battle simulation and AI]
     Campaign[Campaign / factions and chapter story]
     Profile[Profile / scores, unlocks and settings]
@@ -39,6 +42,9 @@ flowchart LR
     Activity --> View
     View --> Scene
     Scene --> Command
+    Scene --> Illustrated
+    Illustrated --> Profile
+    Illustrated --> Locale
     Command --> Profile
     Scene --> Model
     Scene --> Campaign
@@ -74,6 +80,7 @@ flowchart LR
 | Android adapter | Lifecycle, safe-area layout, Canvas, one/two-finger input, audio/haptics, storage, native code/feedback dialogs, minute-boundary Home refresh and manual document export | `app/src/main/java/com/frontline/offline/MainActivity.java` |
 | Scene controller | Protected attempt flow, practical tutorial, campaign/missions/daily/mastery/help screens, results, camera and event-based HUD | `GameScene.java` |
 | Command surfaces | Cached Home preview, Daily state/reset, factual Run details, earned campaign ribbon, compact vertical trail, log usage/warnings, safe clipped scrolling and version footer; no simulation mutation | `CommandScreens.java`, `AppVersion.java` |
+| Illustrated references | Battle/Objective/Opponents briefing, Combat/Kings/Modes manual, cached preview, non-persistent examples, measured wrapping and clipped body scroll with fixed navigation | `IllustratedScreens.java` |
 | Rules | Generation/caps, dispatch/interception/arrivals, objective counters, AI styles, resignation, history/events and exact binary saves | `GameModel.java` |
 | Challenge catalogue | Nine validated objective presets, configurable objectives, deterministic UTC date/version seeds and reset countdown | `Challenge.java` |
 | New progress | Difficulty-specific campaign/challenge records, bounded daily bests, mastery progress/awards and cosmetic selection | `Progress.java` |

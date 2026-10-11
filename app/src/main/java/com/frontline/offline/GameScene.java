@@ -75,6 +75,7 @@ public final class GameScene {
     public double fraction = 1;
     private final Events events;
     private final CommandScreens commandScreens;
+    private final IllustratedScreens illustratedScreens;
     private final ArrayList<Button> buttons = new ArrayList<>();
     private final CommandScreens.Controls screenControls = (id,label,x,y,w,h) -> buttons.add(new Button(id,label,x,y,w,h));
     private int previousOverlay = NONE, selected = -1, sectorPage;
@@ -182,6 +183,7 @@ public final class GameScene {
     public GameScene(Profile profile, GameModel restored, Events events) {
         this.profile = profile; this.events = events;
         commandScreens = new CommandScreens(profile);
+        illustratedScreens = new IllustratedScreens(profile);
         model = restored == null ? new GameModel(0, profile.difficulty, System.nanoTime()) : restored;
         hasBattle = restored != null;
         resultRecorded = restored != null && restored.outcome != GameModel.PLAYING;
@@ -554,7 +556,7 @@ public final class GameScene {
     private void drawSplash(Graphics g) {
         emblem(g, 210, height/2-50, 130);
         g.text("FRONTLINE", 210, height/2+70, 30, WHITE, true, 1);
-        g.text("OFFLINE TACTICS", 210, height/2+98, 11, MUTED, true, 1);
+        g.text(tr("brand.tagline"), 210, height/2+98, 11, MUTED, true, 1);
         g.line(150, height/2+126, 270, height/2+126, 3, BORDER);
         g.line(150, height/2+126, 150+120*Math.min(1,splashElapsed/.85f), height/2+126, 3, COLORS[0]);
     }
@@ -838,7 +840,7 @@ public final class GameScene {
     public void down(float x, float y) {
         pressed = null; selected = -1;
         practiceDragging = false; panning = false;
-        screenDrag = managedScreen() && commandScreens.inContent(y);
+        screenDrag = managedScreen() && inScreenContent(y);
         screenScrolling = false; screenDownY = y; pointerX = x; pointerY = y;
         for (Button button : buttons) if (button.contains(x,y)) { pressed = button; return; }
         if (overlay == TUTORIAL && (tutorialStep == 1 && !practiceDone || tutorialStep == 2) && Math.hypot(x-110,y-tutorialY()) <= 66) {
@@ -965,33 +967,16 @@ public final class GameScene {
             model.levelIndex == 2 ? "Hold enemy kings to boost your whole team." : "Eliminate every rival territory and surviving army.";
     }
     private void drawBriefing(Graphics g) {
-        float y = (height-550)/2;
         int difficulty = previewMode == 2 ? 1 : profile.difficulty;
         Challenge challenge = previewMode == 0 ? null : Challenge.PRESETS[previewChallenge];
         int sector = challenge == null ? previewSector : challenge.sector;
-        g.text(previewMode == 2 ? "Daily Mission" : challenge == null ? "New Attempt" : challenge.name,30,y+35,26,WHITE,true,0);
-        g.text(GameModel.LEVELS[sector].name,30,y+66,18,COLORS[0],true,0);
-        g.text(GameModel.DIFFICULTIES[difficulty]+" / "+(previewMode == 2 ? previewDate+" / UTC" : "Sector "+(sector+1)),30,y+92,12,MUTED,false,0);
-        if (challenge == null) {
-            g.text("3 STARS <= "+time(GameModel.LEVELS[sector].parSeconds)+" / 2 STARS <= "+time(GameModel.LEVELS[sector].parSeconds*1.6f),30,y+122,12,COLORS[2],true,0);
-            float bestTime = profile.progress.campaignTime(sector,difficulty,GameModel.RULES_VERSION);
-            g.text("PERSONAL BEST  "+(bestTime > 0 ? time(bestTime) : "Unplayed"),30,y+146,12,WHITE,false,0);
-        } else {
-            GameModel reference = challenge.create(difficulty,previewMode == 2 ? Challenge.dailySeed(previewDate) : 0,previewChallenge,previewMode == 2 ? previewDate : "");
-            paragraph(g,missionRecordText(profile.progress.missionRecord(reference)),30,y+130,360,12,COLORS[2],true,0);
-        }
-        if (challenge == null && profile.best[sector] > 0) g.text("LEGACY  "+profile.best[sector]+" score / difficulty unknown",30,y+168,11,MUTED,false,0);
-        paragraph(g,challenge == null ? "Eliminate rivals. Any tile can be targeted." : challenge.objective(),30,y+183,360,12,WHITE,true,0);
-        paragraph(g,challenge == null ? "Gaps do not block troop travel." : challenge.type == Challenge.HOLD_KING ? "Losing the marked king resets the hold timer." : challenge.type == Challenge.KEEP_KING ? "Any loss of your starting king fails this mission." : "Exceeding the troop budget fails this mission.",30,y+221,360,11,MUTED,false,0);
-        for (int owner = 1; owner <= GameModel.LEVELS[sector].opponents; owner++) {
-            int faction = GameModel.LEVELS[sector].faction(owner);
-            g.text(Campaign.SHORT_NAMES[faction]+" / "+GameModel.styleName(faction == 1 || faction == 3 ? GameModel.PRESSURE : GameModel.GUARDIAN),30,y+245+(owner-1)*19,12,COLORS[faction],true,0);
-        }
-        paragraph(g,challenge != null && challenge.type == Challenge.KEEP_KING && difficulty > 0 && (sector == 0 || sector == 8)
-            ? tr("brief.defense_pressure") : "Pressure targets crowns; Guardians keep larger reserves.",30,y+344,360,11,MUTED,false,0);
-        button(g,"begin_attempt","Start Attempt",52,y+369,316,46,true,true);
-        button(g,"brief_back","Back",52,y+426,152,44,false,true);
-        button(g,"help","Rules",216,y+426,152,44,false,true);
+        GameModel reference = illustratedScreens.reference(sector,difficulty,challenge,previewChallenge,previewMode == 2 ? previewDate : "");
+        float bestTime = profile.progress.campaignTime(sector,difficulty,GameModel.RULES_VERSION);
+        String record = challenge == null ? "PERSONAL BEST  "+(bestTime > 0 ? time(bestTime) : "Unplayed")
+            : missionRecordText(profile.progress.missionRecord(reference));
+        illustratedScreens.attempt(g,screenControls,reference,previewMode == 2 ? "Daily Mission" : challenge == null ? "New Attempt" : challenge.name,
+            GameModel.DIFFICULTIES[difficulty]+" / "+(previewMode == 2 ? previewDate+" / UTC" : "Sector "+(sector+1)),record,
+            challenge == null && profile.best[sector] > 0 ? "LEGACY  "+profile.best[sector]+" score / difficulty unknown" : "",challenge,height,minimumTouchSize);
     }
     private void drawConfirmation(Graphics g) {
         float y = modal(g,300);
@@ -1057,18 +1042,11 @@ public final class GameScene {
         button(g,"home","Main Menu",52,height-69,316,44,false,true);
     }
     private void drawHelp(Graphics g) {
-        g.text("Field Manual",22,55,27,WHITE,true,0);
-        if (helpReturn == LOGISTICS || helpReturn == LOGISTICS_RESULT
-            || helpReturn == PAUSE && model.battleMode == GameModel.MODE_LOGISTICS) {
-            String[] routedRules = {tr("logistics.rules"),tr("logistics.reinforce_rule"),tr("logistics.attack_rule"),
-                tr("logistics.transit_rule"),tr("logistics.no_attrition"),"Hostile armies meeting in flight cancel one-for-one.",
-                "Reinforcements beyond 100 / 125 are discarded.",tr("logistics.separate_records")};
-            for (int i = 0; i < routedRules.length; i++) paragraph(g,routedRules[i],22,108+i*48,376,11,i%2 == 0 ? WHITE : MUTED,false,0);
-            button(g,"help_back","Back",52,height-69,316,44,false,true); return;
-        }
-        String[] lines = {"Any tile can be targeted. Gaps do not block travel.","Reinforcements beyond 100 / 125 are discarded.","Enemy kings held: 1 x1.2 / 2 x1.44 / 3 x1.728.","Four enemy kings: x3. Each additional king: x1.2.","Your original king never counts toward that boost.","Hostile armies meeting in flight cancel one-for-one.","Surrender: >90% control for ten active seconds,", "and rivals cannot recapture any exposed tile.","3 stars: at/below par. 2 stars: at/below 1.6x par.","Score: 1000 + 50 per capture + time bonus", "(up to 1200, minus 6 per second) + 250 per difficulty.","Legacy records have unknown historical difficulty."};
-        for (int i = 0; i < lines.length; i++) paragraph(g,lines[i],22,108+i*33,376,11,i%2 == 0 ? WHITE : MUTED,false,0);
-        button(g,"help_back","Back",52,height-69,316,44,false,true);
+        illustratedScreens.manual(g,screenControls,logisticsManual(),height,minimumTouchSize);
+    }
+    private boolean logisticsManual() {
+        return helpReturn == LOGISTICS || helpReturn == LOGISTICS_RESULT
+            || helpReturn == PAUSE && model.battleMode == GameModel.MODE_LOGISTICS;
     }
     private void drawCameraHelp(Graphics g) {
         float y = modal(g,300);
@@ -1090,7 +1068,7 @@ public final class GameScene {
 
     public void move(float x, float y) {
         if (screenDrag && (screenScrolling || Math.abs(y-screenDownY) > 8)) {
-            screenScrolling = true; pressed = null; commandScreens.scroll(pointerY-y);
+            screenScrolling = true; pressed = null; scrollContent(pointerY-y);
         }
         if (panning) { panX += x-pointerX; panY += y-pointerY; layoutBoard(); }
         pointerX = x; pointerY = y;
@@ -1131,9 +1109,12 @@ public final class GameScene {
     }
 
     public void cancel() { selected = -1; pressed = null; practiceDragging = false; panning = false; screenDrag = screenScrolling = false; }
-    private boolean managedScreen() { return overlay == MENU || overlay == SECTORS || overlay == SETTINGS || overlay == MORE; }
-    public boolean canScrollScreen() { return managedScreen() && commandScreens.scrollable(); }
-    public boolean scrollScreen(float delta) { if (!managedScreen() || !Float.isFinite(delta)) return false; cancel(); return commandScreens.scroll(delta); }
+    private boolean illustratedScreen() { return overlay == HELP || overlay == BRIEFING; }
+    private boolean managedScreen() { return overlay == MENU || overlay == SECTORS || overlay == SETTINGS || overlay == MORE || illustratedScreen(); }
+    private boolean inScreenContent(float py) { return illustratedScreen() ? illustratedScreens.inContent(py) : commandScreens.inContent(py); }
+    private boolean scrollContent(float delta) { return illustratedScreen() ? illustratedScreens.scroll(delta) : commandScreens.scroll(delta); }
+    public boolean canScrollScreen() { return managedScreen() && (illustratedScreen() ? illustratedScreens.scrollable() : commandScreens.scrollable()); }
+    public boolean scrollScreen(float delta) { if (!managedScreen() || !Float.isFinite(delta)) return false; cancel(); return scrollContent(delta); }
     public String pressedLabel() { return pressed == null ? null : Localization.translate(profile.language,pressed.label); }
 
     public void back() {
@@ -1219,7 +1200,8 @@ public final class GameScene {
             hasBattle = false; openRun();
         },"run_abandon");
         else if (id.equals("play")) {
-            previewMode = 0; previewSector = profile.selectedSector; previewReturn = overlay; overlay = BRIEFING;
+            previewMode = 0; previewSector = profile.selectedSector; previewReturn = overlay;
+            illustratedScreens.openAttempt(); overlay = BRIEFING;
         }
         else if (id.equals("begin_attempt")) requestReplacement(this::beginPreview,"new_attempt");
         else if (id.equals("confirm_replace") && overlay == CONFIRM && confirmedAction != null) {
@@ -1232,16 +1214,18 @@ public final class GameScene {
         else if (id.equals("challenges") || id.equals("missions")) overlay = CHALLENGES;
         else if (id.equals("daily")) overlay = DAILY;
         else if (id.equals("mastery")) overlay = MASTERY;
-        else if (id.equals("help")) { helpReturn = overlay; overlay = HELP; }
+        else if (id.equals("help")) { helpReturn = overlay; illustratedScreens.openManual(logisticsManual()); overlay = HELP; }
         else if (id.equals("help_back")) overlay = helpReturn;
+        else if (id.equals("manual_practice") && overlay == HELP) { tutorialReturn = HELP; openTutorial(false,"field_manual"); }
+        else if (illustratedScreen() && illustratedScreens.command(id)) buttons.clear();
         else if (id.equals("camera_ready")) { profile.cameraGuideSeen = true; overlay = NONE; }
         else if (id.equals("today_mission")) {
             previewMode = 2; previewDate = Challenge.date(events.now()); previewChallenge = Challenge.dailyId(previewDate);
-            previewSector = Challenge.PRESETS[previewChallenge].sector; overlay = BRIEFING;
+            previewSector = Challenge.PRESETS[previewChallenge].sector; illustratedScreens.openAttempt(); overlay = BRIEFING;
         }
         else if (id.startsWith("challenge_")) {
             previewMode = 1; previewChallenge = Integer.parseInt(id.substring(10));
-            previewSector = Challenge.PRESETS[previewChallenge].sector; overlay = BRIEFING;
+            previewSector = Challenge.PRESETS[previewChallenge].sector; illustratedScreens.openAttempt(); overlay = BRIEFING;
         }
         else if (id.startsWith("mission_tab_")) challengePage = Integer.parseInt(id.substring(12));
         else if (id.startsWith("theme_")) {
@@ -1270,7 +1254,7 @@ public final class GameScene {
         }
         else if (id.equals("next")) {
             log("next_sector",""); previewMode = 0; previewSector = Math.min(GameModel.LEVELS.length-1,model.levelIndex+1);
-            profile.selectedSector = previewSector; overlay = BRIEFING;
+            profile.selectedSector = previewSector; illustratedScreens.openAttempt(); overlay = BRIEFING;
         }
         else if (id.equals("settings")) {
             settingsReturn = overlay; commandScreens.languages = false; commandScreens.tools = false;
@@ -1416,7 +1400,7 @@ public final class GameScene {
         log(completed ? "tutorial_complete" : "tutorial_skip","step="+(tutorialStep+1)+";semantics=v11");
         String next = tutorialNextCommand; tutorialNextCommand = null;
         if (next != null) { overlay = tutorialReturn; command(next,true); }
-        else if (tutorialStartsBattle) { overlay = NONE; showCameraGuide(); } else overlay = MENU;
+        else if (tutorialStartsBattle) { overlay = NONE; showCameraGuide(); } else overlay = tutorialReturn;
         tutorialStartsBattle = false;
     }
 
