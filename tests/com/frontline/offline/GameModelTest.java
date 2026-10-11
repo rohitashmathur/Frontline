@@ -164,7 +164,7 @@ public final class GameModelTest {
         profile.unlocked = 2; profile.best[0] = 100; profile.stars[0] = 2;
         scene.overlay = GameScene.MENU; click(scene,"sectors");
         TextGraphics labels = new TextGraphics(); scene.render(labels,700);
-        check(labels.text.contains("Cleared / Legacy 100"),"Completed historical sectors explicitly show Cleared and Legacy");
+        check(labels.text.contains("Cleared / previous rules 100"),"Completed historical sectors explicitly identify previous-rule records");
         check(labels.text.contains("Locked"),"Locked sectors visibly identify their state");
         click(scene,"level_2");
         check(profile.selectedSector == 2 && scene.overlay == GameScene.SECTORS,"Selecting sector updates campaign selection without leaving its path");

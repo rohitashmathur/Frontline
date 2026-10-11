@@ -2,7 +2,7 @@
 
 Current source version: `0.12.2` (version code `14`).
 
-Frontline is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in. V12 changes presentation/navigation and optional local playtest observation; V11 battle rules, records and binary saves remain in force. The 0.12.1/0.12.2 source has not been built or tested; [Step 2 verification](verification-v12-step2.md) is pending. Existing V12 screenshots and verification describe 0.12.0 only.
+Frontline is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in. V12 changes presentation/navigation and optional local playtest observation; V11 battle rules, records and binary saves remain in force. The current 0.12.2 build passed portable and native V12 checks on 2026-10-11; see [Step 2 verification](verification-v12-step2.md). Current screenshots are stored separately from the preserved 0.12.0 evidence.
 
 ## Components
 
@@ -161,7 +161,7 @@ The tutorial's practice state cannot modify a retained battle. Screens outside t
 - Expanded Playtest Tools show usage while logging is on or off. A warning starts at 450 entries, and at 500 it explicitly describes oldest-event replacement. Export/clear remain manual; capacity and persistence format are unchanged.
 - Home Run details separate battle and retry facts. A finished run is summarized by actual battles cleared. No streak state, new reward or rule migration is introduced.
 
-These are source-level implementation descriptions, not verified layout or lifecycle results for 0.12.2.
+These implementation descriptions are backed by the current portable and native V12 checks within their reported scope. Physical-phone usability, fluent language review and longer-session behavior remain human checks.
 
 ## Simulation Flow
 
@@ -211,7 +211,7 @@ Collision tests use relative motion over the tick, not a single rendered positio
 
 The PowerShell build compiles Java, generates the original WAV loop, packages resources, produces DEX, aligns and signs the APK, then verifies the signature. Test tools and fixtures are not included in the APK. `.toolchain/`, generated `build/`, signing keys and credentials are ignored by Git.
 
-`android-tests/` is a separate, test-only instrumentation package. Its harness exercises real Android multi-pointer events against the production BattleView and captures native Canvas pixels, including V12 screens at four display configurations in all three languages. It has not run against the current source update. Its APK is never part of the game's distribution. `DocsVersionTest` checks designated current version fields without treating historical release reports as current evidence.
+`android-tests/` is a separate, test-only instrumentation package. Its V12 mode passed four display configurations in all three languages against 0.12.2, including native layout/targets, local-log warnings, cached previews, countdown callback cleanup and feedback persistence after Activity restart. Other historical native modes were not all rerun in this verification step. Its APK is never part of the game's distribution. `DocsVersionTest` checks designated current version fields without treating historical release reports as current evidence.
 
 `app/` and root Gradle files contain Android. `ios/` and `backend/` are reserved, unimplemented folders in this monorepo. An iOS port can reuse assets, campaign content and specifications, but native Java does not directly compile for iOS. Future online services must be optional so offline play remains available.
 

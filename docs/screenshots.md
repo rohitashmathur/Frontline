@@ -1,8 +1,16 @@
 # Native Screenshots
 
-**Current 0.12.2 source has no new screenshots.** Neither 0.12.1 nor 0.12.2 was built/captured in these code-only steps. The galleries below retain their actual historical versions; they are not current-layout evidence. See [pending Step 2 verification](verification-v12-step2.md).
+## V12 Step 2 / 0.12.2
 
-## V12 Step 1
+Actual Android 15 Canvas captures from the current verified 0.12.2 APK, taken on 2026-10-11. Home/Campaign/Settings below use the tall-phone fixture; dense preview and log-warning examples use the small-phone fixture. They use deterministic staged data, not organically won battles or physical-phone playtests. Native checks passed four display configurations in all three languages; [current verification](verification-v12-step2.md) states their exact scope.
+
+<img src="screenshots/v12-step2/home.png" width="220" alt="0.12.2 native Command Deck" /> <img src="screenshots/v12-step2/campaign.png" width="220" alt="0.12.2 compact vertical campaign trail" /> <img src="screenshots/v12-step2/settings.png" width="220" alt="0.12.2 grouped native settings" />
+
+<img src="screenshots/v12-step2/preview-46.png" width="220" alt="Sector 46 scaled Home preview" /> <img src="screenshots/v12-step2/preview-60.png" width="220" alt="Sector 60 scaled Home preview" /> <img src="screenshots/v12-step2/log-full-hi.png" width="220" alt="Hindi full-log warning with logging disabled" />
+
+Full captures and native text-bound reports are under ignored `build/device/v12-native/`. Historical galleries below keep their original images and version identities.
+
+## Historical V12 Step 1 / 0.12.0
 
 Actual final `0.12.0` Android Canvas captures, not the design mockups. The deterministic fixture stages a retained round and legacy clear to inspect the Home, connected campaign path and grouped settings. Automated checks cover English, Indonesian and Hindi at four display configurations; these are not evidence of physical-phone usability or organically won battles.
 

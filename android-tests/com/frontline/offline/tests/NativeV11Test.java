@@ -79,7 +79,7 @@ public final class NativeV11Test extends Instrumentation {
                 require(storage.edit().clear().putBoolean("tutorial-seen",true).putBoolean("camera-guide-seen",true)
                     .putBoolean("sound",false).putBoolean("music",false).putBoolean("haptics",false)
                     .putInt("difficulty",1).putInt("unlocked",2).putInt("best-0",1700).putInt("stars-0",2).commit(),"V12 presentation fixture installed");
-                launch(); ui(this::v12Screens);
+                launch(); ui(this::v12Screens); v12Details();
             } else if (mode.equals("suite")) {
                 require(!backup.getBoolean(MARKER, false), "interrupted fixture requires restore-only first");
                 copy(backup, storage.getAll());
@@ -201,6 +201,82 @@ public final class NativeV11Test extends Instrumentation {
             for (int i = 0; i < controls.size(); i++) for (int j = i+1; j < controls.size(); j++)
                 require(!Rect.intersects(bounds(controls.get(i)),bounds(controls.get(j))),"native hit targets do not overlap");
             if (!(boolean)call(scene,"scrollScreen",45f)) break;
+        }
+    }
+
+    private void v12Details() throws Exception {
+        ui(() -> {
+            Object retained = read(scene,"model"); byte[] battle = bytes(retained);
+            write(profile,"language","en"); write(scene,"hasBattle",false); write(scene,"overlay",constant("GameScene","MENU"));
+            Object screens = read(scene,"commandScreens");
+            for (int sector : new int[] {45,59}) {
+                write(profile,"selectedSector",sector); call(scene,"scrollScreen",-10000f);
+                capture("en","v12-preview-"+(sector+1),"drawMenu");
+                Object cached = read(screens,"cachedPreview"); byte[] preview = bytes(cached);
+                for (int draw = 0; draw < 100; draw++) {
+                    render().recycle(); require(read(screens,"cachedPreview") == cached,"native redraw reuses preview");
+                }
+                same(preview,bytes(cached),"preview never advances simulation");
+            }
+            same(battle,bytes(retained),"inactive preview leaves retained battle unchanged");
+            write(scene,"hasBattle",true); write(profile,"selectedSector",1); render().recycle();
+            if ((float)read(scene,"minimumTouchSize") <= 64 && (float)read(scene,"height") >= 620)
+                require(optionalButton("logistics") != null,"compact Home exposes whole Frontier Lab target without scrolling");
+            require(reveal("campaign_progress") != null,"campaign ribbon reachable"); tap("campaign_progress");
+            require((int)read(scene,"overlay") == constant("GameScene","SECTORS"),"ribbon opens campaign"); tap("back");
+            tap("settings"); tap("tools"); Object log = read(profile,"log"); call(log,"clear");
+            for (String language : LANGUAGES) {
+                write(profile,"language",language); write(log,"enabled",true);
+                while ((int)call(log,"size") < 450) call(log,"add",1L,"fixture",null,"");
+                write(log,"enabled",false); Object export = reveal("export_log");
+                String warning = (String)call(type("Localization"),"text",language,"playtest.log_warning",new Object[0]);
+                require(((String)read(export,"label")).contains(warning),"near-full warning included in spoken export context");
+                capture(language,"v12-log-near-full","drawSettings");
+                write(log,"enabled",true);
+                while ((int)call(log,"size") < 500) call(log,"add",1L,"fixture",null,"");
+                write(log,"enabled",false); export = reveal("export_log");
+                warning = (String)call(type("Localization"),"text",language,"playtest.log_full",new Object[0]);
+                require(((String)read(export,"label")).contains(warning),"full warning explains oldest-event replacement");
+                capture(language,"v12-log-full","drawSettings"); tap("clear_log");
+                require((int)call(log,"size") == 0 && !(boolean)read(log,"enabled"),"manual clear preserves opt-out");
+            }
+            tap("back"); call(scene,"scrollScreen",-10000f); call(view,"resume"); render().recycle();
+            android.os.Handler handler = (android.os.Handler)read(view,"handler"); Runnable refresh = (Runnable)read(view,"refreshHome");
+            require(handler.hasCallbacks(refresh),"Home schedules minute-boundary refresh");
+            tap("settings"); render().recycle(); require(!handler.hasCallbacks(refresh),"leaving Home removes countdown callback");
+            tap("back"); render().recycle(); require(handler.hasCallbacks(refresh),"returning Home restores countdown callback");
+            call(view,"stop"); require(!handler.hasCallbacks(refresh),"background stop removes countdown callback");
+        });
+        for (int choice = 0; choice < 3; choice++) {
+            final int rating = choice; final String language = LANGUAGES[choice]; final String[] attempt = new String[1];
+            final byte[][] terminal = new byte[1][];
+            ui(() -> {
+                write(profile,"language",language); write(read(profile,"log"),"enabled",true); call(scene,"start",0);
+                Object model = read(scene,"model");
+                for (Object tile : (List<?>)read(model,"territories")) { write(tile,"owner",1); write(tile,"troops",5d); }
+                ((List<?>)read(model,"troops")).clear(); write(model,"elapsed",12f); write(model,"startingKingLost",true);
+                write(model,"outcome",constant("GameModel","LOST")); write(model,"terminalReason",constant("GameModel","TERMINAL_ELIMINATED"));
+                call(scene,"update",0f); terminal[0] = bytes(model); attempt[0] = (String)read(profile,"attemptId");
+                call(view,"resume"); ((Runnable)read(view,"showBattleFeedback")).run();
+                android.app.AlertDialog dialog = (android.app.AlertDialog)read(view,"feedbackDialog");
+                require(dialog != null && dialog.isShowing(),"opt-in terminal attempt displays native feedback");
+                require(dialog.getListView().getAdapter().getCount() == 3,"feedback has three rating choices");
+                String key = new String[] {"playtest.too_easy","playtest.about_right","playtest.too_hard"}[rating];
+                require(dialog.getListView().getAdapter().getItem(rating).equals(call(type("Localization"),"text",language,key,new Object[0])),"feedback choice translated");
+                dialog.getListView().performItemClick(null,rating,rating);
+                require((int)read(profile,"battleFeedback") == rating && (boolean)read(profile,"feedbackPrompted"),"native rating commits once");
+                require(!(boolean)call(scene,"submitBattleFeedback",attempt[0],rating),"duplicate rating rejected");
+                same(terminal[0],bytes(model),"native rating preserves terminal battle"); call(view,"stop");
+            });
+            close(); launch();
+            ui(() -> {
+                require(attempt[0].equals(read(profile,"attemptId")) && (int)read(profile,"battleFeedback") == rating
+                    && (boolean)read(profile,"feedbackPrompted"),"feedback guard survives Activity restart");
+                same(terminal[0],bytes(read(scene,"model")),"terminal battle restores byte-exactly after rating");
+                write(view,"pendingFeedbackAttemptId",attempt[0]); call(view,"resume"); ((Runnable)read(view,"showBattleFeedback")).run();
+                require(read(view,"feedbackDialog") == null,"rated attempt cannot reopen prompt"); call(view,"stop");
+                call(scene,"start",0); require(!(boolean)call(scene,"submitBattleFeedback",attempt[0],rating),"stale callback cannot rate replacement");
+            });
         }
     }
 

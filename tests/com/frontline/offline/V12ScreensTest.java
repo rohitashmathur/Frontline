@@ -106,7 +106,11 @@ public final class V12ScreensTest {
     private static void previewCache() throws Exception {
         GameScene.Profile p = new GameScene.Profile(); CommandScreens screens = new CommandScreens(p);
         GameModel first = screens.homePreview(0,1); byte[] before = first.save();
-        home(screens,p,0); home(screens,p,60_000); p.language = "hi"; home(screens,p,120_000);
+        for (int draw = 0; draw < 100; draw++) {
+            home(screens,p,draw*60_000L);
+            check(screens.homePreview(0,1) == first,"Consecutive redraws reuse one preview model");
+        }
+        p.language = "hi"; home(screens,p,120_000);
         check(screens.homePreview(0,1) == first && Arrays.equals(before,first.save()),"Redraw/time/language reuse immutable preview");
         GameModel actual = new GameModel(2,1,9); actual.elapsed = 7; byte[] active = actual.save();
         screens.home(new GameModelTest.NullGraphics(),new Capture(),actual,true,0,1120,64);
