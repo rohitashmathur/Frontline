@@ -1,6 +1,18 @@
 # Native Screenshots
 
-## V13 / 0.13.0
+## V13.1 / 0.13.1
+
+Actual Android 15 Canvas captures from the local 0.13.1 APK, taken on 2026-10-11. These show the illustrated tabs and increased coverage-to-action spacing, not mockups. Data is staged for repeatable verification, not organically won battles or evidence of physical-phone playtesting.
+
+<img src="screenshots/v13-1/home.png" width="220" alt="0.13.1 Home with a gap below coverage" /> <img src="screenshots/v13-1/attempt-battle.png" width="220" alt="Illustrated Battle briefing tab" /> <img src="screenshots/v13-1/attempt-objective.png" width="220" alt="Illustrated Objective briefing tab" />
+
+<img src="screenshots/v13-1/attempt-opponents.png" width="220" alt="Opponent factions and rulers" /> <img src="screenshots/v13-1/manual-combat.png" width="220" alt="Combat rules with interception and deployment examples" /> <img src="screenshots/v13-1/manual-kings.png" width="220" alt="King growth milestones and demo controls" /> <img src="screenshots/v13-1/manual-modes.png" width="220" alt="Mode rules with an illustrated Classic Run" />
+
+<img src="screenshots/v13-1/home-hi.png" width="220" alt="Hindi Home with campaign progress visible" /> <img src="screenshots/v13-1/manual-kings-hi.png" width="220" alt="Hindi king rules and growth milestones" /> <img src="screenshots/v13-1/battle-tablet-wide.png" width="620" alt="Current wide tablet battlefield" />
+
+Six requested display configurations and all three languages passed [0.13.1 verification](verification-v13-1.md). Full staged captures and exact native View/text reports are under ignored `build/device/v13-native/`. The 2560x1600 override yielded a 1920x1600 app View in this emulator; captures do not prove full-width behavior on physical 13-inch hardware. Older galleries below keep their version identities.
+
+## Historical V13 / 0.13.0
 
 Actual Android 15 Canvas captures from the local 0.13.0 testing APK, taken on 2026-10-11. Home is initially visible without scrolling; campaign progress and best total sit above the bottom shortcuts. Audio/haptics are deliberately enabled in the Settings example. All data is staged for repeatability, not organically won battles or physical-phone playtest evidence.
 

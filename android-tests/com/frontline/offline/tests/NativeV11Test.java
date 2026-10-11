@@ -145,7 +145,7 @@ public final class NativeV11Test extends Instrumentation {
     }
 
     private void v12Screens() throws Exception {
-        require("0.13.0".equals(read(type("AppVersion"),"NAME")),"V13 footer matches release");
+        require("0.13.1".equals(read(type("AppVersion"),"NAME")),"V13.1 footer matches release");
         call(scene,"start",1); Object model = read(scene,"model");
         call(model,"launch",0,1,.25); write(model,"elapsed",17f);
         write(scene,"overlay",constant("GameScene","MENU"));
@@ -196,7 +196,9 @@ public final class NativeV11Test extends Instrumentation {
             render().recycle(); checkLabels();
             String method = (int)read(scene,"overlay") == constant("GameScene","MENU") ? "drawMenu"
                 : (int)read(scene,"overlay") == constant("GameScene","SETTINGS") ? "drawSettings"
-                : (int)read(scene,"overlay") == constant("GameScene","MORE") ? "drawMore" : "drawSectors";
+                : (int)read(scene,"overlay") == constant("GameScene","MORE") ? "drawMore"
+                : (int)read(scene,"overlay") == constant("GameScene","HELP") ? "drawHelp"
+                : (int)read(scene,"overlay") == constant("GameScene","BRIEFING") ? "drawBriefing" : "drawSectors";
             require(joined(textLayout(method)).contains((String)read(type("AppVersion"),"NAME")),"version footer remains visible when scrolling");
             List<?> controls = buttons(); float density = view.getResources().getDisplayMetrics().density;
             for (Object b : controls) { Rect r = bounds(b); require(r.width()+1 >= 48*density && r.height()+1 >= 48*density,"native controls at least 48dp"); }
@@ -222,8 +224,10 @@ public final class NativeV11Test extends Instrumentation {
             }
             same(battle,bytes(retained),"inactive preview leaves retained battle unchanged");
             write(scene,"hasBattle",true); write(profile,"selectedSector",1); render().recycle();
-            if ((float)read(scene,"minimumTouchSize") <= 64 && (float)read(scene,"height") >= 620)
-                require(optionalButton("logistics") != null,"compact Home exposes whole Frontier Lab target without scrolling");
+            if (optionalButton("logistics") == null) {
+                require(optionalButton("more") != null,"short Home exposes secondary modes through fixed More target");
+                tap("more"); require(reveal("logistics") != null,"Frontier Lab remains reachable through More"); tap("back");
+            }
             require(reveal("campaign_progress") != null,"campaign ribbon reachable"); tap("campaign_progress");
             require((int)read(scene,"overlay") == constant("GameScene","SECTORS"),"ribbon opens campaign"); tap("back");
             tap("settings"); tap("tools"); Object log = read(profile,"log"); call(log,"clear");
@@ -300,6 +304,7 @@ public final class NativeV11Test extends Instrumentation {
             List<TextLine> home = capture(language,"v13-home","drawMenu");
             String best = (String)call(type("Localization"),"text",language,"deck.best_total",new Object[] {call(profile,"totalScore")});
             require(joined(home).contains(best),"best total visible without scrolling");
+            illustratedDetails(language);
             tap("settings"); tap("music"); tap("sound"); tap("haptics");
             capture(language,"v13-settings-on","drawSettings");
             tap("music"); tap("sound"); tap("haptics"); tap("back");
@@ -320,6 +325,32 @@ public final class NativeV11Test extends Instrumentation {
             java.util.Map<?,?> widths = (java.util.Map<?,?>)read(view,"textWidths");
             require(widths.size() <= 1024,"native text metric cache is bounded");
         }
+    }
+
+    private void illustratedDetails(String language) throws Exception {
+        Object retained = read(scene,"model"); byte[] battle = bytes(retained), progress = bytes(read(profile,"progress"));
+        tap("play");
+        for (int tab = 0; tab < 3; tab++) {
+            tap("attempt_tab_"+tab); capture(language,"v131-attempt-"+tab,"drawBriefing"); auditV12Pages();
+        }
+        tap("help");
+        for (int tab = 0; tab < 3; tab++) {
+            tap("manual_tab_"+tab); capture(language,"v131-manual-"+tab,"drawHelp"); auditV12Pages();
+        }
+        tap("manual_tab_0"); tap("manual_collision"); capture(language,"v131-interception","drawHelp");
+        for (String id : new String[] {"manual_quarter","manual_half","manual_all"}) {
+            tap(id); capture(language,"v131-"+id.replace('_','-'),"drawHelp");
+        }
+        tap("manual_tab_1"); for (int i = 0; i < 3; i++) tap("manual_gain");
+        capture(language,"v131-four-kings","drawHelp"); tap("manual_lose");
+        tap("manual_practice"); require((int)read(scene,"overlay") == constant("GameScene","TUTORIAL"),"native manual opens practice");
+        tap("tutorial_skip"); require((int)read(scene,"overlay") == constant("GameScene","HELP"),"native practice returns to manual");
+        tap("help_back"); tap("begin_attempt");
+        require((int)read(scene,"overlay") == constant("GameScene","CONFIRM"),"native illustrated attempt protects retained battle");
+        tap("cancel_replace"); tap("brief_back");
+        require((int)read(scene,"overlay") == constant("GameScene","MENU"),"native illustrated Back returns Home");
+        same(battle,bytes(retained),"native illustrated examples preserve exact battle");
+        same(progress,bytes(read(profile,"progress")),"native illustrated examples preserve progress");
     }
 
     private void nativeProgressMigration() throws Exception {
@@ -672,7 +703,8 @@ public final class NativeV11Test extends Instrumentation {
         List<TextLine> lines = new ArrayList<>();
         int[] clipped = {0};
         List<RectF> clips = new ArrayList<>();
-        boolean commandScreen = "drawMenu".equals(drawMethod) || "drawSectors".equals(drawMethod) || "drawSettings".equals(drawMethod) || "drawMore".equals(drawMethod);
+        boolean commandScreen = "drawMenu".equals(drawMethod) || "drawSectors".equals(drawMethod) || "drawSettings".equals(drawMethod) || "drawMore".equals(drawMethod)
+            || "drawHelp".equals(drawMethod) || "drawBriefing".equals(drawMethod);
         Object graphics = Proxy.newProxyInstance(activity.getClassLoader(), new Class<?>[] {type("GameScene$Graphics")}, (proxy, method, args) -> {
             if (method.getName().equals("measureText")) return call(view, "measureText", args);
             if (method.getName().equals("clip")) { clipped[0]++; clips.add(new RectF((float)args[0],(float)args[1],(float)args[0]+(float)args[2],(float)args[1]+(float)args[3])); }
