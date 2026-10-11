@@ -1,18 +1,30 @@
 # Frontline
 
-An original offline Android territory-conquest game. **V12 step 2 / 0.12.2** polishes the dark Command Deck, compact vertical campaign trail and full-page settings, while retaining the opt-in local playtest additions from 0.12.1. It retains 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, five-battle Classic runs and three experimental routed maps. Difficulty-specific records, mastery rewards, music, practical tutorials and saved battles remain unchanged. English, Bahasa Indonesia and Hindi are bundled offline. No login, backend, network permission, ads or remote telemetry.
+An original offline Android territory-conquest game. **V13 / 0.13.0** improves localized rendering, makes Home non-scrolling, expands tablet battlefields and gates first-time mode entry through the skippable tutorial. It retains 60 campaign sectors across ten story chapters, up to five computer opponents, nine objective missions, an offline daily mission, five-battle Classic runs and three experimental routed maps. Difficulty-specific records, mastery rewards, music and saved battles remain unchanged. English, Bahasa Indonesia and Hindi are bundled offline. No login, backend, network permission, ads or remote telemetry.
 
-Current source version: `0.12.2` (version code `14`).
+Current source version: `0.13.0` (version code `15`).
 
-**Verified testing build:** 0.12.2 passed 931,470 portable checks and 153,977 native checks on 2026-10-11. The original 0.12.1/0.12.2 pushes were code-only; testing and a local APK were subsequently authorized. Current screenshots and results are now available. Automated checks do not establish physical-phone comfort, fluent translation quality or enjoyment.
+**Verification:** see [V13 verification](docs/verification-v13.md) for current results and remaining device work. The preserved 0.12.2 report records 931,470 portable and 153,977 native checks. Automated results do not establish physical-phone comfort, fluent translation quality or enjoyment.
 
 ## Install
 
-Android 7.0 or newer is required. The current local testing APK is **0.12.2**, `build/FrontlineV12_2.apk`; the build script also produces `build/Frontline-debug.apk`. The historical 0.12.0 `build/FrontlineV12.apk` is preserved separately. No new GitHub release or APK asset is published. The [historical V11 test release](https://github.com/rohitashmathur/Frontline/releases/tag/v0.11.0) remains available. This is a debug-signed prototype, not a Play Store release.
+Android 7.0 or newer is required. The V13 local testing build is `build/FrontlineV13.apk`; the build script also produces `build/Frontline-debug.apk`. Historical versioned APKs are preserved separately. No new GitHub release asset is published. The [historical V11 test release](https://github.com/rohitashmathur/Frontline/releases/tag/v0.11.0) remains available. This is a debug-signed prototype, not a Play Store release.
 
 For an existing debug build signed with the original prototype key, install over V7, V6 or V5 to retain local progress; do not uninstall first. Package identity is unchanged. Legacy scores have unknown attempt difficulty; the current Campaign UI labels old scores as previous-rules records rather than comparable current bests. Existing overfilled V5 garrisons are clamped to the 100/125 limits, while armies already in flight retain their units.
 
-## V12 Step 2
+## V13
+
+- Bounded per-thread translation recognition cache, constant-text fast path, precompiled percentage recognition and a bounded native text-width cache. No change to translated meanings or battle rules.
+- Home fits without scrolling. Campaign progress and best total sit above bottom shortcuts; compact windows use a three-mode row. Very short/enlarged-display windows use a bottom More entry for secondary modes/shortcuts and, when necessary, Daily.
+- Tablet controls retain a constrained size while the battlefield uses extra width. Landscape tablet battles put controls on the left and the map on the right. Phones remain portrait; tablets support rotation.
+- First entry to Campaign, Classic Run, Missions/Challenges, Daily or Frontier Lab opens How to Play before creating a battle. Complete/Skip persists the existing tutorial flag and continues the intended mode. Back cancels without marking completion; existing players who already saw it are not forced through again.
+- Fresh Classic Run: five battles and four perk choices, not a perk after the final battle.
+- [Playtest kit](docs/playtest-kit-v13.md) and [CSV summary tool](docs/playtest-summary-v13.md) support observed anonymous sessions, repeated-export deduplication and honest incomplete-attempt reporting.
+- Exact V7 `12345` unlock behavior remains available in this testing prototype. Public-release feature gating, licensing and release signing remain separate decisions.
+
+See [release notes](docs/release-v13.md), [verification](docs/verification-v13.md) and [screenshots](docs/screenshots.md). Development stops after this V13 commit and push.
+
+## Historical V12 Step 2
 
 - Charcoal/mint Command Deck with the actual retained battle preview, coverage/time, primary Continue and secondary New Attempt. A fresh game shows its real three-star target instead of fabricated battle metrics.
 - Settings gear remains top-right. A full-width Daily card immediately below it shows Available/Completed and the UTC reset countdown. Home refreshes that countdown at minute boundaries without a continuous animation loop.
@@ -27,7 +39,7 @@ For an existing debug build signed with the original prototype key, install over
 
 The 0.12.1 local measurement work is retained: build/attempt context, Home navigation and language changes, first actual dispatch timing, Run milestones, refused Logistics routes and optional post-battle difficulty feedback. Logging remains opt-in and local. Its corrected routing test now compiles and passes. Native checks exercise rating submission, duplicate/stale rejection and persistence after Activity restart.
 
-See [Step 2 release notes](docs/release-v12-step2.md) and [current verification](docs/verification-v12-step2.md). [Step 1 verification](docs/verification-v12.md) remains historical 0.12.0 evidence. Daily streaks are deferred until rule-version semantics are agreed. Development stops after this verification step's commit and push; further work requires approval.
+See historical [Step 2 release notes](docs/release-v12-step2.md) and [verification](docs/verification-v12-step2.md). [Step 1 verification](docs/verification-v12.md) remains historical 0.12.0 evidence. Daily streaks are deferred until rule-version semantics are agreed.
 
 ## V11 Changes (Preserved)
 
@@ -76,8 +88,12 @@ Settings now includes **Enter Code**. Enter exactly `12345` and select Unlock (o
 ## Documentation
 
 - [Application Architecture and Flow Diagrams](docs/architecture.md)
-- [V12 Step 2 Release / Current Source](docs/release-v12-step2.md)
-- [V12 Step 2 Verification](docs/verification-v12-step2.md)
+- [V13 Release / Current Source](docs/release-v13.md)
+- [V13 Verification](docs/verification-v13.md)
+- [V13 Observed Playtest Kit](docs/playtest-kit-v13.md)
+- [Offline CSV Summary Tool](docs/playtest-summary-v13.md)
+- [Historical V12 Step 2 Release](docs/release-v12-step2.md)
+- [Historical V12 Step 2 Verification](docs/verification-v12-step2.md)
 - [V12 Step 1 Release](docs/release-v12.md)
 - [V12 Step 1 Verification](docs/verification-v12.md)
 - [Current V11 Rules](docs/game-rules-v11.md)
@@ -90,9 +106,11 @@ Settings now includes **Enter Code**. Enter exactly `12345` and select Unlock (o
 - [V10 Acceptance and Verification](docs/verification-v10.md)
 - [Native Android Screenshots](docs/screenshots.md)
 
-Current **0.12.2** native screenshots below use deterministic staged data, not organically won battles. Older galleries remain separately labelled in the screenshot documentation.
+Current **0.13.0** native screenshots below use deterministic staged data, not organically won battles. Older galleries remain separately labelled in the screenshot documentation.
 
-<img src="docs/screenshots/v12-step2/home.png" width="220" alt="0.12.2 native Command Deck fixture" /> <img src="docs/screenshots/v12-step2/campaign.png" width="220" alt="0.12.2 native vertical campaign trail fixture" /> <img src="docs/screenshots/v12-step2/settings.png" width="220" alt="0.12.2 native grouped settings fixture" />
+<img src="docs/screenshots/v13/home.png" width="220" alt="0.13.0 non-scrolling native Home fixture" /> <img src="docs/screenshots/v13/campaign.png" width="220" alt="0.13.0 native campaign trail fixture" /> <img src="docs/screenshots/v13/settings-on.png" width="220" alt="0.13.0 native settings with audio and haptics on" />
+
+<img src="docs/screenshots/v13/battle-tablet-13.png" width="660" alt="0.13.0 wide tablet battlefield with separate controls column" />
 
 ## Play
 
@@ -108,7 +126,7 @@ Use the main menu to continue, select a sector, start a new attempt, choose a mi
 | --- | --- |
 | `app/` and root Gradle files | Native Android app, campaign, portable battle rules and assets |
 | `scripts/` | Windows setup, build and Android/portable verification |
-| `tests/` | Core, legacy regression, V10/V11 features and V12 screen tests |
+| `tests/` | Core, legacy regression, V10-V13 feature/screen checks and Python CSV tool tests |
 | `android-tests/` | Separate test-only native flow and multi-touch instrumentation |
 | `tools/` | Rendering adapters, deterministic test saves and original music generation |
 | `docs/` | Architecture, diagrams, versioned rules, acceptance and native screenshots |
@@ -136,7 +154,7 @@ Alternatively, open the Gradle project in Android Studio using Java 17, Android 
 
 ## Verification
 
-The current portable suite and V12 native suite passed on 2026-10-11; see the [0.12.2 report](docs/verification-v12-step2.md) for per-suite counts, native results, APK checksum and exact remaining checks. Not every historical script below was rerun. Historical assertion totals, APK checksums and screenshots remain in their original versioned reports.
+The current portable suite, CSV tool tests and V13 native suite passed on 2026-10-11; see the [0.13.0 report](docs/verification-v13.md) for per-suite counts, native results, APK checksum and exact remaining checks. Not every historical script below was rerun. Historical assertion totals, APK checksums and screenshots remain in their original versioned reports.
 
 The portable suite is designed to cover all 60 maps on all three difficulties, dispatch, production/caps, capture/reinforcement, swept interception, packet accounting, corruption recovery, V4/V5 migration, six-team saves, held-king milestones, guarded resignation, AI reserves/recovery/coordination, progression, tutorial and camera input. Java2D renders the same scene commands at compact, tall and tablet sizes and checks text bounds. Current release metadata is checked against AppVersion, both build paths and designated current-document metadata; historical reports are intentionally excluded.
 
@@ -150,9 +168,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v11.p
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v11-run.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v11-logistics.ps1 -RunDevice
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v12.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-android-v13.ps1
+python -B -m unittest discover -s tests/tools -p test_playtest_summary.py -v
 ```
 
-The native scripts target Android 15 and only the named `emulator-5580`; test fixtures never target a physical phone. Put the actual previous `FrontlineV6.apk` in `build/` for the separate upgrade check. The V12 harness passed four display configurations in all three languages against 0.12.2, with the app retaining portrait orientation. It restores original preferences/display overrides and removes the separate instrumentation package. Captures go to `build/device/`; fixtures/tools are not packaged in the game APK. `device-smoke-test.ps1` is the historical V6 flow script, not the V10 acceptance runner. The dedicated emulator was stopped after this run.
+The native scripts target Android 15 and only the named `emulator-5580`; test fixtures never target a physical phone. Put the actual previous `FrontlineV6.apk` in `build/` for the separate upgrade check. The V13 harness covers six requested display configurations in all three languages, including wide tablet battlefields; exact native View sizes are recorded in its captures. It restores original preferences/display overrides and removes the separate instrumentation package. Captures go to `build/device/v13-native/`; fixtures/tools are not packaged in the game APK. `device-smoke-test.ps1` is the historical V6 flow script, not the current acceptance runner. The dedicated emulator was stopped after this run.
 
 For V7's code dialog and real V6 upgrade check, run `scripts/test-unlock-code.ps1` after starting the dedicated emulator. Keep the actual V6 APK at `build/FrontlineV6.apk`. The test uses real native input, verifies wrong/empty/cancelled codes, confirms saved data is unchanged apart from unlocks, restarts the app, and selects/plays Sector 60. It also checks the dialog on a small phone viewport.
 

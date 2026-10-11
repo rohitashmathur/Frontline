@@ -29,6 +29,7 @@ public final class Localization {
         java.util.Arrays.asList("en", "id", "hi"));
     private static final Pattern FIELD = Pattern.compile("\\{([a-z][a-z_]*)(?::(02|2f))?\\}");
     private static final Pattern NUMBER = Pattern.compile("-?(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\\.[0-9]+)?");
+    private static final Pattern PERCENT = Pattern.compile("[0-9]+(?:\\.[0-9]+)?%");
     private static final Pattern FACTION_STATUS = Pattern.compile("^(YOU|Ember|Auric|Vesper|Iron|Frost) (OUT|[0-9]+%)$");
     private static final Pattern DIFFICULTY_RECORD = Pattern.compile("^(Easy|Normal|Hard) ([0-9,]+) / ([0-9]+:[0-9]{2})$");
     private static final Pattern SLASH = Pattern.compile("^(.+?) / (.+)$");
@@ -36,6 +37,16 @@ public final class Localization {
     private static final Map<String, List<String>> FIELDS = new LinkedHashMap<>();
     private static final Map<String, String> LITERALS = new LinkedHashMap<>();
     private static final List<Sentence> SENTENCES = new ArrayList<>();
+    static final int CACHE_LIMIT = 2048;
+    private static final ThreadLocal<TranslationCache> TRANSLATIONS = new ThreadLocal<TranslationCache>() {
+        @Override protected TranslationCache initialValue() { return new TranslationCache(); }
+    };
+    private static final class TranslationCache extends LinkedHashMap<String,String> {
+        String language = "";
+        long misses;
+        TranslationCache() { super(256,.75f,true); }
+        @Override protected boolean removeEldestEntry(Map.Entry<String,String> entry) { return size() > CACHE_LIMIT; }
+    }
 
     static {
         for (String language : LANGUAGES) CATALOGS.put(language, new LinkedHashMap<String, String>());
@@ -95,6 +106,7 @@ public final class Localization {
         Object[] values = args == null ? new Object[0] : args;
         if (values.length != names.size())
             throw new IllegalArgumentException(key + " expects " + names + ", got " + values.length + " arguments");
+        if (names.isEmpty()) return template;
         Matcher matcher = FIELD.matcher(template);
         StringBuffer result = new StringBuffer();
         while (matcher.find()) {
@@ -107,8 +119,23 @@ public final class Localization {
 
     public static String translate(String language, String source) { return legacy(language, source); }
     public static String legacy(String language, String english) {
-        return legacy(language(language), english, 0);
+        String code = language(language);
+        if (english == null) return "";
+        if ("en".equals(code) || english.isEmpty()) return english;
+        TranslationCache cache = TRANSLATIONS.get();
+        if (!code.equals(cache.language)) { cache.clear(); cache.language = code; }
+        String result = cache.get(english);
+        if (result == null) {
+            cache.misses++;
+            result = legacy(code,english,0);
+            cache.put(english,result);
+        }
+        return result;
     }
+
+    static int cachedTranslations() { return TRANSLATIONS.get().size(); }
+    static long translationMisses() { return TRANSLATIONS.get().misses; }
+    static void clearTranslationCache() { TRANSLATIONS.remove(); }
 
     private static String legacy(String language, String english, int depth) {
         if (english == null) return "";
@@ -121,7 +148,7 @@ public final class Localization {
                 ? translated.toUpperCase(locale(language)) : translated;
         }
         if (NUMBER.matcher(english).matches()) return rawNumber(language, english);
-        if (english.matches("[0-9]+(?:\\.[0-9]+)?%"))
+        if (PERCENT.matcher(english).matches())
             return number(language, new BigDecimal(english.substring(0, english.length() - 1)), false) + "%";
         for (Sentence sentence : SENTENCES) {
             Matcher match = sentence.pattern.matcher(english);
@@ -537,7 +564,8 @@ public final class Localization {
         add("deck.ready", "Ready to play", "Siap bermain", "खेलने के लिए तैयार");
         add("deck.coverage", "Coverage {value}%", "Penguasaan {value}%", "नियंत्रण {value}%");
         add("deck.modes", "Game modes", "Mode permainan", "खेल के मोड");
-        add("deck.five_battles", "5 battles", "5 pertempuran", "5 लड़ाइयाँ");
+        add("deck.five_battles", "5 battles / 4 perks", "5 laga / 4 bonus", "5 लड़ाइयाँ / 4 लाभ");
+        add("deck.more_button", "More", "Lainnya", "और");
         add("deck.objectives", "Three objective types", "Tiga jenis tujuan", "तीन प्रकार के लक्ष्य");
         add("deck.routed_maps", "{count} routed maps", "{count} peta rute", "{count} मार्ग वाले नक्शे");
         add("deck.more", "More", "Lainnya", "और");

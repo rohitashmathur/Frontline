@@ -1,8 +1,20 @@
 # Native Screenshots
 
-## V12 Step 2 / 0.12.2
+## V13 / 0.13.0
 
-Actual Android 15 Canvas captures from the current verified 0.12.2 APK, taken on 2026-10-11. Home/Campaign/Settings below use the tall-phone fixture; dense preview and log-warning examples use the small-phone fixture. They use deterministic staged data, not organically won battles or physical-phone playtests. Native checks passed four display configurations in all three languages; [current verification](verification-v12-step2.md) states their exact scope.
+Actual Android 15 Canvas captures from the local 0.13.0 testing APK, taken on 2026-10-11. Home is initially visible without scrolling; campaign progress and best total sit above the bottom shortcuts. Audio/haptics are deliberately enabled in the Settings example. All data is staged for repeatability, not organically won battles or physical-phone playtest evidence.
+
+<img src="screenshots/v13/home.png" width="220" alt="V13 non-scrolling Home at the Redmi-style size" /> <img src="screenshots/v13/campaign.png" width="220" alt="V13 compact campaign trail" /> <img src="screenshots/v13/settings-on.png" width="220" alt="V13 grouped settings with toggles enabled" />
+
+<img src="screenshots/v13/home-small.png" width="220" alt="V13 compact Home at 480x800" /> <img src="screenshots/v13/home-hi.png" width="220" alt="V13 localized Hindi Home" /> <img src="screenshots/v13/tutorial-first.png" width="220" alt="V13 first-mode tutorial with Skip" />
+
+<img src="screenshots/v13/battle-tablet-8.png" width="300" alt="V13 portrait tablet battlefield" /> <img src="screenshots/v13/battle-tablet-13.png" width="620" alt="V13 wide tablet battlefield with the HUD on the left" />
+
+Six requested display configurations and all three languages are covered by [V13 verification](verification-v13.md). Full captures and exact native View sizes are under ignored `build/device/v13-native/`. Emulator display overrides do not establish physical inch size, hardware performance or rotation comfort.
+
+## Historical V12 Step 2 / 0.12.2
+
+Actual Android 15 Canvas captures from the historical 0.12.2 APK, taken on 2026-10-11. Home/Campaign/Settings below use the tall-phone fixture; dense preview and log-warning examples use the small-phone fixture. They use deterministic staged data, not organically won battles or physical-phone playtests. Native checks passed four display configurations in all three languages; [historical verification](verification-v12-step2.md) states their exact scope.
 
 <img src="screenshots/v12-step2/home.png" width="220" alt="0.12.2 native Command Deck" /> <img src="screenshots/v12-step2/campaign.png" width="220" alt="0.12.2 compact vertical campaign trail" /> <img src="screenshots/v12-step2/settings.png" width="220" alt="0.12.2 grouped native settings" />
 

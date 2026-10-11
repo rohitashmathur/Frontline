@@ -5,6 +5,10 @@ final class UiTestControls {
     static float[] find(GameScene scene,String id,float height) {
         float[] point = visible(scene,id,height);
         if (point != null) return point;
+        if (scene.overlay == GameScene.MENU && !id.equals("more")) {
+            point = visible(scene,"more",height);
+            if (point != null) { scene.down(point[0],point[1]); scene.up(point[0],point[1]); }
+        }
         String section = id.startsWith("language_") ? "language_picker"
             : id.equals("playtest_log") || id.equals("export_log") || id.equals("clear_log") ? "tools" : null;
         if (section != null && scene.overlay == GameScene.SETTINGS) {

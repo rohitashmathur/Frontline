@@ -11,7 +11,7 @@
         android:usesCleartextTraffic="false"
         android:enableOnBackInvokedCallback="false">
         <activity android:name=".MainActivity"
-            android:screenOrientation="portrait"
+            android:screenOrientation="unspecified"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

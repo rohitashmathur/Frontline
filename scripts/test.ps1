@@ -15,7 +15,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Battle tests failed.' }
 & $java '-cp' $classes 'com.frontline.offline.DocsVersionTest' $projectRoot
 if ($LASTEXITCODE -ne 0) { throw 'Current release metadata check failed.' }
-foreach ($test in @('V12ScreensTest','V12PlaytestTest','V11ModelTest','V11ProgressTest','V11SceneTest','LocalizationTest','V11BalanceTest','RunStateTest','V11RunSceneTest','V11LogTest','LogisticsRoutesTest','LogisticsRecordsTest','V11LogisticsModelTest','V11LogisticsSceneTest')) {
+foreach ($test in @('V13Test','V12ScreensTest','V12PlaytestTest','V11ModelTest','V11ProgressTest','V11SceneTest','LocalizationTest','V11BalanceTest','RunStateTest','V11RunSceneTest','V11LogTest','LogisticsRoutesTest','LogisticsRecordsTest','V11LogisticsModelTest','V11LogisticsSceneTest')) {
     if (Test-Path -LiteralPath (Join-Path $classes "com\frontline\offline\$test.class")) {
         & $java '-cp' $classes "com.frontline.offline.$test"
         if ($LASTEXITCODE -ne 0) { throw "$test failed." }

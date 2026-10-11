@@ -64,7 +64,7 @@ public final class GameScene {
     public static final int NONE = 0, PAUSE = 1, SECTORS = 2, SETTINGS = 3, RESULT = 4,
         SPLASH = 5, MENU = 6, TUTORIAL = 7, BRIEFING = 8, CONFIRM = 9,
         CHALLENGES = 10, DAILY = 11, MASTERY = 12, HELP = 13, CAMERA_HELP = 14,
-        RUN_HOME = 15, RUN_COUNCIL = 16, RUN_SUMMARY = 17, LOGISTICS = 18, LOGISTICS_RESULT = 19;
+        RUN_HOME = 15, RUN_COUNCIL = 16, RUN_SUMMARY = 17, LOGISTICS = 18, LOGISTICS_RESULT = 19, MORE = 20;
     public static final int BACKGROUND = 0xFF17191B, PANEL = 0xFF232629;
     public static final int WHITE = 0xFFF0F7F7, MUTED = 0xFFA2ABA9, BORDER = 0xFF41494A;
     public static final int[] COLORS = {0xFF5DE0BA, 0xFFFF816C, 0xFFF6D477, 0xFFAC9EEF, 0xFF65B9F2, 0xFFED99BF};
@@ -83,7 +83,10 @@ public final class GameScene {
     private float screenDownY;
     private boolean resultRecorded, tutorialStartsBattle, practiceDragging, practiceDone;
     private boolean tutorialTerminal;
+    private String tutorialNextCommand;
+    private int tutorialReturn = MENU;
     public float minimumTouchSize = 64;
+    public float battlefieldWidth = 420;
     private int tutorialStep;
     private int fractionVisits, challengePage, helpReturn = MENU;
     private boolean reinforcementDone, kingPracticeGain, kingPracticeLoss;
@@ -104,6 +107,7 @@ public final class GameScene {
     private float zoom = 1, panX, panY, fitScale, mapWidth, mapHeight;
     private boolean panning;
     private Button pressed;
+    private Graphics lastGraphics, localizedGraphics;
 
     private static final class Button {
         final String id, label;
@@ -132,7 +136,9 @@ public final class GameScene {
     }
     private String tr(String key,Object... args) { return Localization.text(profile.language,key,args); }
     private Graphics localized(final Graphics target) {
-        return new Graphics() {
+        if (target == lastGraphics) return localizedGraphics;
+        lastGraphics = target;
+        localizedGraphics = new Graphics() {
             public void rect(float x,float y,float w,float h,float r,int c) { target.rect(x,y,w,h,r,c); }
             public void circle(float x,float y,float r,int c) { target.circle(x,y,r,c); }
             public void line(float x,float y,float x2,float y2,float w,int c) { target.line(x,y,x2,y2,w,c); }
@@ -143,6 +149,20 @@ public final class GameScene {
             public void text(String text,float x,float baseline,float size,int c,boolean bold,int align) {
                 target.text(Localization.translate(profile.language,text),x,baseline,size,c,bold,align);
             }
+        };
+        return localizedGraphics;
+    }
+    private static Graphics shifted(final Graphics target,final float dx) {
+        if (dx == 0) return target;
+        return new Graphics() {
+            public void rect(float x,float y,float w,float h,float r,int c) { target.rect(x+dx,y,w,h,r,c); }
+            public void circle(float x,float y,float r,int c) { target.circle(x+dx,y,r,c); }
+            public void line(float x,float y,float x2,float y2,float w,int c) { target.line(x+dx,y,x2+dx,y2,w,c); }
+            public void polygon(float[] p,int f,int s,float w) { float[] out = p.clone(); for (int i = 0; i < out.length; i+=2) out[i] += dx; target.polygon(out,f,s,w); }
+            public void text(String t,float x,float y,float z,int c,boolean b,int a) { target.text(t,x+dx,y,z,c,b,a); }
+            public float measureText(String t,float s,boolean b) { return target.measureText(t,s,b); }
+            public void clip(float x,float y,float w,float h) { target.clip(x+dx,y,w,h); }
+            public void unclip() { target.unclip(); }
         };
     }
     private void paragraph(Graphics g,String text,float x,float baseline,float width,float size,int color,boolean bold,int align) {
@@ -266,11 +286,12 @@ public final class GameScene {
     public void render(Graphics g, float height) {
         g = localized(g);
         this.height = height; buttons.clear();
-        g.rect(0, 0, 420, height, 0, BACKGROUND);
+        g.rect(viewLeft(), 0, Math.max(420,battlefieldWidth), height, 0, BACKGROUND);
         if (overlay == SPLASH) { drawSplash(g); return; }
         if (overlay == TUTORIAL) { drawTutorial(g); return; }
         if (overlay == SECTORS) { drawSectors(g); return; }
         if (overlay == SETTINGS) { drawSettings(g); return; }
+        if (overlay == MORE) { drawMore(g); return; }
         if (overlay == BRIEFING) { drawBriefing(g); return; }
         if (overlay == CHALLENGES) { drawChallenges(g); return; }
         if (overlay == DAILY) { drawDaily(g); return; }
@@ -288,6 +309,9 @@ public final class GameScene {
             drawMenu(g);
             return;
         }
+        Graphics boardGraphics = g;
+        float hudOffset = wideBattle() ? viewLeft() : 0;
+        g = shifted(g,hudOffset);
         g.text("FRONTLINE", 22, 47, 27, WHITE, true, 0);
         addIcon(g, "pause", "Pause", 274, 19, overlay == NONE);
         addIcon(g, "restart", "Restart Round", 322, 19, false);
@@ -321,11 +345,18 @@ public final class GameScene {
         else if (routeRefusalTimer > 0) g.text(tr("logistics.refused"),22,232,11,COLORS[1],true,0);
         else if (feedbackTimer > 0) g.text(feedbackText(),22,232,11,WHITE,false,0);
         layoutBoard();
-        drawBoard(g);
+        drawBoard(boardGraphics);
         drawFooter(g);
+        if (hudOffset != 0) {
+            for (int i = 0; i < buttons.size(); i++) {
+                Button b = buttons.get(i); buttons.set(i,new Button(b.id,b.label,b.x+hudOffset,b.y,b.width,b.height));
+            }
+            boardGraphics.line(viewLeft()+430,0,viewLeft()+430,height,1,BORDER);
+        }
+        g = boardGraphics;
         if (overlay != NONE) {
             buttons.clear();
-            g.rect(0, 0, 420, height, 0, 0xD9081013);
+            g.rect(viewLeft(), 0, Math.max(420,battlefieldWidth), height, 0, 0xD9081013);
             if (overlay == PAUSE) drawPause(g);
             if (overlay == SETTINGS) drawSettings(g);
             if (overlay == RESULT) drawResult(g);
@@ -341,18 +372,22 @@ public final class GameScene {
         }
         float top = boardTop(), bottom = boardBottom();
         mapWidth = maxX-minX; mapHeight = maxY;
-        fitScale = Math.min(66,Math.min(374/mapWidth,(bottom-top)/mapHeight));
+        fitScale = Math.min(66,Math.min((boardRight()-boardLeft()-30)/mapWidth,(bottom-top)/mapHeight));
         boardScale = fitScale*zoom;
         clampCamera();
-        boardX = (420-mapWidth*boardScale)/2-minX*boardScale+panX;
+        boardX = (boardLeft()+boardRight()-mapWidth*boardScale)/2-minX*boardScale+panX;
         boardY = top+(bottom-top-mapHeight*boardScale)/2+panY;
     }
 
-    private float boardTop() { return 244; }
-    private float boardBottom() { return height-149; }
+    private float viewLeft() { return (420-Math.max(420,battlefieldWidth))/2; }
+    private boolean wideBattle() { return battlefieldWidth >= 800 && battlefieldWidth > height*1.15f; }
+    private float boardLeft() { return wideBattle() ? viewLeft()+448 : viewLeft()+8; }
+    private float boardRight() { return 420-viewLeft()-8; }
+    private float boardTop() { return wideBattle() ? 24 : 244; }
+    private float boardBottom() { return wideBattle() ? height-24 : height-149; }
 
     private void clampCamera() {
-        float maxX = Math.max(0,(mapWidth*boardScale-374)/2);
+        float maxX = Math.max(0,(mapWidth*boardScale-(boardRight()-boardLeft()-30))/2);
         float maxY = Math.max(0,(mapHeight*boardScale-(boardBottom()-boardTop()))/2);
         panX = Math.max(-maxX,Math.min(maxX,panX));
         panY = Math.max(-maxY,Math.min(maxY,panY));
@@ -364,7 +399,8 @@ public final class GameScene {
         cancel();
         float next = Math.max(1,Math.min(3,zoom*factor)), ratio = next/zoom;
         float centerY = (boardTop()+boardBottom())/2;
-        panX = x-210-(x-210-panX)*ratio+dx;
+        float centerX = (boardLeft()+boardRight())/2;
+        panX = x-centerX-(x-centerX-panX)*ratio+dx;
         panY = y-centerY-(y-centerY-panY)*ratio+dy;
         zoom = next; layoutBoard();
     }
@@ -388,7 +424,7 @@ public final class GameScene {
     }
 
     private void drawBoard(Graphics g) {
-        g.clip(8,boardTop(),404,boardBottom()-boardTop());
+        g.clip(boardLeft(),boardTop(),boardRight()-boardLeft(),boardBottom()-boardTop());
         int aimed = selected < 0 ? -1 : territoryAt(pointerX, pointerY);
         int aimColor = model.objectiveType == Challenge.BUDGET && model.unitsSent+aimedAmount() > model.deploymentBudget ? COLORS[1] : WHITE;
         boolean logistics = model.battleMode == GameModel.MODE_LOGISTICS;
@@ -396,7 +432,7 @@ public final class GameScene {
         if (logistics && aimed >= 0 && aimed != selected && aimedRoute == null) aimColor = COLORS[1];
         for (GameModel.Territory territory : model.territories) {
             float x = cx(territory), y = cy(territory), radius = boardScale * .94f;
-            if (x+radius < 8 || x-radius > 412 || y+radius < boardTop() || y-radius > boardBottom()) continue;
+            if (x+radius < boardLeft() || x-radius > boardRight() || y+radius < boardTop() || y-radius > boardBottom()) continue;
             int color = territory.owner == -1 ? BORDER : armyColor(territory.owner);
             g.polygon(hex(x, y, radius), mix(BACKGROUND, color, territory.owner == -1 ? .42f : .29f),
                 selected == territory.id || aimed == territory.id ? aimColor : mix(BACKGROUND, color, .75f),
@@ -411,7 +447,7 @@ public final class GameScene {
             g.circle(x, y, node, territory.owner == -1 ? 0xFF2C3233 : mix(BACKGROUND, color, .12f));
             String count = Integer.toString(territory.count());
             float size = Math.min(20,boardScale*.45f)*Math.min(1,2.5f/count.length());
-            if (x >= 20 && x <= 400) g.text(count,x,y+size*.3f,size,WHITE,true,1);
+            if (x >= boardLeft()+12 && x <= boardRight()-12) g.text(count,x,y+size*.3f,size,WHITE,true,1);
             if (territory.owner >= 0) factionMark(g,x,y+node+6,Math.min(5,boardScale*.13f),model.level().faction(territory.owner),color);
             if (logistics && selected >= 0 && territory.id != selected && model.route(selected,territory.id,0) != null)
                 g.circle(x+radius*.5f,y-radius*.45f,3,COLORS[0]);
@@ -462,7 +498,7 @@ public final class GameScene {
             g.polygon(new float[] {pointerX,pointerY,pointerX-dx*12-dy*6,pointerY-dy*12+dx*6,
                 pointerX-dx*12+dy*6,pointerY-dy*12-dx*6}, aimColor, 0, 0);
             if (boardScale >= 36) {
-                float labelX = Math.max(24,Math.min(396,(cx(source)+pointerX)/2));
+                float labelX = Math.max(boardLeft()+16,Math.min(boardRight()-16,(cx(source)+pointerX)/2));
                 float labelY = Math.max(boardTop()+20,Math.min(boardBottom()-5,(cy(source)+pointerY)/2-10));
                 g.rect(labelX-15,labelY-16,30,20,3,BACKGROUND);
                 g.text(Integer.toString(aimedAmount()),labelX,labelY,15,WHITE,true,1);
@@ -812,12 +848,13 @@ public final class GameScene {
         int id = territoryAt(x,y);
         if (id >= 0 && model.territories.get(id).owner == GameModel.PLAYER) {
             selected = id; pointerX = x; pointerY = y;
-        } else if (y >= boardTop() && y <= boardBottom() && zoom > 1) {
+        } else if (x >= boardLeft() && x <= boardRight() && y >= boardTop() && y <= boardBottom() && zoom > 1) {
             panning = true; pointerX = x; pointerY = y;
         }
     }
 
     private boolean activeBattle() { return hasBattle && model.outcome == GameModel.PLAYING; }
+    private void drawMore(Graphics g) { commandScreens.more(g,screenControls,events.now(),height,minimumTouchSize); }
     private boolean unfinishedRun() { return profile.run != null && !profile.run.terminal(); }
     private void openRun() {
         cancel();
@@ -1094,7 +1131,7 @@ public final class GameScene {
     }
 
     public void cancel() { selected = -1; pressed = null; practiceDragging = false; panning = false; screenDrag = screenScrolling = false; }
-    private boolean managedScreen() { return overlay == MENU || overlay == SECTORS || overlay == SETTINGS; }
+    private boolean managedScreen() { return overlay == MENU || overlay == SECTORS || overlay == SETTINGS || overlay == MORE; }
     public boolean canScrollScreen() { return managedScreen() && commandScreens.scrollable(); }
     public boolean scrollScreen(float delta) { if (!managedScreen() || !Float.isFinite(delta)) return false; cancel(); return commandScreens.scroll(delta); }
     public String pressedLabel() { return pressed == null ? null : Localization.translate(profile.language,pressed.label); }
@@ -1106,6 +1143,7 @@ public final class GameScene {
         else if (overlay == SETTINGS && commandScreens.languages) commandScreens.languages = false;
         else if (overlay == SETTINGS) overlay = settingsReturn;
         else if (overlay == SECTORS) overlay = previousOverlay;
+        else if (overlay == MORE) overlay = MENU;
         else if (overlay == CONFIRM) cancelReplacement();
         else if (overlay == HELP) overlay = helpReturn;
         else if (overlay == BRIEFING) overlay = previewMode == 0 ? previewReturn : previewMode == 1 ? CHALLENGES : DAILY;
@@ -1115,7 +1153,7 @@ public final class GameScene {
         else if (overlay == SPLASH || overlay == RESULT) overlay = MENU;
         else if (overlay == TUTORIAL) {
             if (tutorialStep > 0) { tutorialStep--; log("tutorial_step","step="+(tutorialStep+1)); }
-            else { tutorialStartsBattle = false; overlay = MENU; }
+            else { tutorialStartsBattle = false; tutorialNextCommand = null; overlay = tutorialReturn; }
         }
         requestBattleFeedback(); events.changed();
     }
@@ -1123,12 +1161,22 @@ public final class GameScene {
     public void pause() { cancel(); if (overlay == NONE) { overlay = PAUSE; log("pause",""); } }
 
     private void command(String id) {
+        command(id,false);
+    }
+    private void command(String id,boolean afterTutorial) {
         int before = overlay;
-        if (before == MENU) log("home_tap","target="+id);
+        if (before == MENU && !afterTutorial) log("home_tap","target="+id);
         events.cue(0);
+        if (!profile.tutorialSeen && modeCommand(id)) {
+            tutorialReturn = before;
+            openTutorial(false,"first_mode="+id);
+            tutorialNextCommand = id;
+            buttons.clear(); events.changed(); return;
+        }
         if (id.equals("pause")) pause();
         else if (id.equals("resume")) { overlay = NONE; log("resume",""); }
         else if (id.equals("menu") || id.equals("home")) { cancel(); overlay = MENU; }
+        else if (id.equals("more")) { commandScreens.reset(MORE); overlay = MORE; }
         else if (id.equals("run")) openRun();
         else if (id.equals("logistics")) overlay = LOGISTICS;
         else if (id.startsWith("logistics_map_")) {
@@ -1228,7 +1276,7 @@ public final class GameScene {
             settingsReturn = overlay; commandScreens.languages = false; commandScreens.tools = false;
             commandScreens.reset(SETTINGS); overlay = SETTINGS;
         } else if (id.equals("sectors") || id.equals("campaign_progress")) {
-            previousOverlay = overlay; sectorPage = Campaign.chapterIndex(profile.selectedSector); overlay = SECTORS;
+            previousOverlay = overlay == MORE ? MENU : overlay; sectorPage = Campaign.chapterIndex(profile.selectedSector); overlay = SECTORS;
         } else if (id.equals("back")) back();
         else if (id.equals("language_picker")) { commandScreens.languages = !commandScreens.languages; buttons.clear(); }
         else if (id.equals("tools")) { commandScreens.tools = !commandScreens.tools; buttons.clear(); }
@@ -1237,8 +1285,8 @@ public final class GameScene {
         else if (id.equals("quarter")) fraction = .25;
         else if (id.equals("half")) fraction = .5;
         else if (id.equals("all")) fraction = 1;
-        else if (id.equals("zoom_in")) cameraGesture(210,(boardTop()+boardBottom())/2,1.25f,0,0);
-        else if (id.equals("zoom_out")) cameraGesture(210,(boardTop()+boardBottom())/2,.8f,0,0);
+        else if (id.equals("zoom_in")) cameraGesture((boardLeft()+boardRight())/2,(boardTop()+boardBottom())/2,1.25f,0,0);
+        else if (id.equals("zoom_out")) cameraGesture((boardLeft()+boardRight())/2,(boardTop()+boardBottom())/2,.8f,0,0);
         else if (id.equals("fit_board")) { zoom = 1; panX = panY = 0; layoutBoard(); }
         else if (id.equals("unlock_code")) events.unlockCodeRequested();
         else if (id.equals("sound")) profile.sound = !profile.sound;
@@ -1342,11 +1390,23 @@ public final class GameScene {
     }
 
     private void openTutorial(boolean startsBattle) {
+        tutorialReturn = MENU;
+        openTutorial(startsBattle,startsBattle ? "first_attempt" : "replay");
+    }
+    private void openTutorial(boolean startsBattle,String origin) {
         cancel(); tutorialStep = 0; practiceDone = reinforcementDone = kingPracticeGain = kingPracticeLoss = false;
         tutorialFraction = .25; tutorialKings = 0; fractionVisits = 0;
         tutorialStartsBattle = startsBattle; overlay = TUTORIAL;
+        tutorialNextCommand = null;
         tutorialTerminal = false;
-        log("tutorial_start",startsBattle ? "first_attempt" : "replay");
+        log("tutorial_start",origin);
+    }
+    private static boolean modeCommand(String id) {
+        return id.equals("play") || id.equals("resume") || id.equals("run") || id.equals("new_run")
+            || id.equals("begin_run_battle") || id.equals("continue_run") || id.equals("logistics")
+            || id.equals("continue_logistics") || id.startsWith("logistics_map_")
+            || id.equals("missions") || id.equals("challenges") || id.equals("daily")
+            || id.equals("today_mission") || id.startsWith("challenge_") || id.equals("begin_attempt");
     }
 
     private void finishTutorial(boolean completed) {
@@ -1354,14 +1414,16 @@ public final class GameScene {
         tutorialTerminal = true;
         profile.tutorialSeen = true;
         log(completed ? "tutorial_complete" : "tutorial_skip","step="+(tutorialStep+1)+";semantics=v11");
-        if (tutorialStartsBattle) { overlay = NONE; showCameraGuide(); } else overlay = MENU;
+        String next = tutorialNextCommand; tutorialNextCommand = null;
+        if (next != null) { overlay = tutorialReturn; command(next,true); }
+        else if (tutorialStartsBattle) { overlay = NONE; showCameraGuide(); } else overlay = MENU;
         tutorialStartsBattle = false;
     }
 
-    public boolean needsAnimation() { return overlay == NONE || overlay == SPLASH || overlay == DAILY; }
+    public boolean needsAnimation() { return overlay == NONE || overlay == SPLASH; }
 
     private int territoryAt(float x, float y) {
-        if (y < boardTop()-7 || y > boardBottom()+8 || x < 8 || x > 412) return -1;
+        if (y < boardTop()-7 || y > boardBottom()+8 || x < boardLeft() || x > boardRight()) return -1;
         for (GameModel.Territory territory : model.territories) {
             if (insideHex(x,y,cx(territory),cy(territory),boardScale*.95f)) return territory.id;
         }

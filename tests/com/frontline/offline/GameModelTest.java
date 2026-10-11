@@ -128,8 +128,7 @@ public final class GameModelTest {
         check(scene.overlay == GameScene.SECTORS,"Tapping locked sector cannot start a battle");
         scene.back(); check(scene.overlay == GameScene.MENU,"Sector Back returns to menu");
         click(scene,"play");
-        check(scene.overlay == GameScene.BRIEFING && !scene.hasBattle,"New Attempt shows targets before a run");
-        click(scene,"begin_attempt");
+        check(scene.overlay == GameScene.TUTORIAL && !scene.hasBattle,"First mode entry opens tutorial before creating a battle");
         check(scene.overlay == GameScene.TUTORIAL && scene.model.elapsed == 0,"First attempt starts with a paused practical tutorial");
         click(scene,"tutorial_next");
         scene.render(new NullGraphics(),700);
@@ -142,6 +141,8 @@ public final class GameModelTest {
         click(scene,"tutorial_next"); click(scene,"demo_quarter"); click(scene,"demo_half"); click(scene,"demo_all");
         scene.down(110,225); scene.up(310,225); click(scene,"tutorial_next");
         click(scene,"demo_capture"); click(scene,"demo_lose"); click(scene,"tutorial_next"); click(scene,"tutorial_next");
+        check(scene.overlay == GameScene.BRIEFING && !scene.hasBattle,"Tutorial completion continues to chosen sector briefing");
+        click(scene,"begin_attempt");
         check(profile.tutorialSeen && scene.hasBattle && scene.overlay == GameScene.NONE,"Tutorial completion starts chosen sector");
         scene.model.launch(0,1,.25);
         scene.pause(); click(scene,"menu");
@@ -176,7 +177,7 @@ public final class GameModelTest {
         scene.render(new NullGraphics(),700);
         check(scene.buttonPosition("resume") == null,"Finished battles do not offer Resume");
         GameScene first = new GameScene(new GameScene.Profile(),null,SILENT);
-        first.back(); click(first,"play"); click(first,"begin_attempt"); click(first,"tutorial_skip");
+        first.back(); click(first,"play"); click(first,"tutorial_skip"); click(first,"begin_attempt");
         check(first.profile.tutorialSeen && first.overlay == GameScene.NONE,"First-time tutorial can be skipped");
     }
 
@@ -426,7 +427,7 @@ public final class GameModelTest {
         new GameScene(unfinished,null,SILENT);
         check(unfinished.unlocked == 5,"Reaching but not clearing old final sector does not unlock the next chapter");
         for (int sector : new int[] {5,11,17,23,29,35,41,47,53,59}) {
-            GameScene.Profile profile = new GameScene.Profile(); profile.unlocked = sector;
+            GameScene.Profile profile = new GameScene.Profile(); profile.unlocked = sector; profile.tutorialSeen = true;
             GameScene scene = new GameScene(profile,null,SILENT); scene.start(sector);
             scene.model.outcome = GameModel.WON; scene.update(.01f);
             check(profile.unlocked == Math.min(59,sector+1),"Chapter-ending victory unlocks the correct next sector without overflowing");

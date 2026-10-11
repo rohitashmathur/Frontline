@@ -65,6 +65,7 @@ public final class V12PlaytestTest {
     }
     private static GameScene restored(GameScene s,Events events) throws Exception {
         GameScene.Profile p = new GameScene.Profile();
+        p.tutorialSeen = s.profile.tutorialSeen; p.cameraGuideSeen = s.profile.cameraGuideSeen;
         p.log = PlaytestLog.restore(s.profile.log.save());
         p.attemptId = s.profile.attemptId; p.firstLaunchObserved = s.profile.firstLaunchObserved;
         p.feedbackPrompted = s.profile.feedbackPrompted; p.battleFeedback = s.profile.battleFeedback;

@@ -1,8 +1,12 @@
-# Frontline Architecture (V12 Step 2)
+# Frontline Architecture (V13)
 
-Current source version: `0.12.2` (version code `14`).
+Current source version: `0.13.0` (version code `15`).
 
-Frontline is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in. V12 changes presentation/navigation and optional local playtest observation; V11 battle rules, records and binary saves remain in force. The current 0.12.2 build passed portable and native V12 checks on 2026-10-11; see [Step 2 verification](verification-v12-step2.md). Current screenshots are stored separately from the preserved 0.12.0 evidence.
+Frontline is an offline, single-activity Android game. The production app is native Java and Android Canvas; simulation, scene, progress, challenge selection and measurement also run without Android for regression tests. There is no server, login, network permission, advertising, remote telemetry or cloud save. Local measurement is explicit opt-in. V13 adds bounded localization/text measurement caches, a non-scrolling responsive Home, shared tablet viewport sizing, a full-height right-hand battlefield on wide tablets, and a first-mode tutorial continuation gate. V11 battle rules, records and binary saves remain in force. See [V13 verification](verification-v13.md); historical reports/screenshots preserve their version identities.
+
+`Viewport` controls native scale, density-aware touch size and logical battlefield width. Menus stay in a constrained 420-unit column. Tablet maps expand without enlarging every control; wide tablet battles shift the HUD and its touch/accessibility coordinates together. `Localization` bounds recognition caches to 2,048 entries per thread and clears on a catalog change; `BattleView` bounds text-width measurements to 1,024 entries. The first-mode tutorial retains only a transient intended command; no game starts until tutorial completion/skip, and Back does not mark tutorial seen. Existing `tutorial-seen` preferences remain the persistence contract.
+
+The offline Python [playtest summary tool](playtest-summary-v13.md) reads manual CSV exports; it is not packaged in the app and sends nothing over the network.
 
 ## Components
 
@@ -93,11 +97,16 @@ flowchart TD
     Splash --> Menu[Main menu]
     Menu --> Select[Chapter and sector selection]
     Select -->|Back| Menu
-    Select -->|Play selected sector| Brief
-    Select -->|Continue selected retained battle| Battle
+    Select -->|Play / Continue selected sector| Intent
     Select --> Settings
     Menu --> Settings[Settings]
-    Menu --> RunHome[New / Continue Run]
+    Menu --> Intent[Requested mode action / transient continuation]
+    Intent --> Seen{Tutorial already seen?}
+    Seen -->|No| Tutorial[Five practical steps / Skip]
+    Tutorial -->|Complete / Skip and persist seen| Destination
+    Tutorial -->|Back / cancel intent without marking seen| PreviousScreen
+    Seen -->|Yes| Destination{Intended mode}
+    Destination -->|Classic Run| RunHome[New / Continue Run]
     RunHome --> RunStart[Create associated frozen Classic battle]
     RunStart --> Battle
     Battle -->|Run result| RunResult{Run victory?}
@@ -107,7 +116,7 @@ flowchart TD
     Retry --> RunHome
     RunResult -->|Fifth win / second loss| Summary[Factual run summary; no campaign rewards]
     Summary --> Menu
-    Menu --> LogisticsHome[Experimental Logistics / map and difficulty]
+    Destination -->|Frontier Lab| LogisticsHome[Experimental Logistics / map and difficulty]
     LogisticsHome --> LogisticsBattle[Protected replacement / routed battle]
     LogisticsBattle --> Routes[Preview legal paths and ETA / route-aware AI]
     Routes --> Transit{Transit tile still friendly on arrival?}
@@ -118,19 +127,16 @@ flowchart TD
     Settings -->|Back to originating screen| PreviousScreen[Home, campaign, pause or battlefield]
     Menu --> How[How to Play / five interactive steps]
     How --> Menu
-    Menu --> Play[New Attempt / campaign, challenge or daily]
+    Destination -->|Campaign / mission / daily selection| Play[New Attempt / mode selection]
+    Destination -->|Continue exact retained battle| Battle
     Play --> Brief[Briefing / objective, star target and AI styles]
     Brief --> Replace{Unfinished battle exists?}
     Replace -->|Yes| Confirm[Confirm replacement]
     Confirm -->|Cancel / keep exact model| Brief
     Confirm -->|Replace| Start[Create clean attempt / log explicit abandonment]
     Replace -->|No| Start
-    Start --> First{Tutorial seen?}
-    First -->|No| Tutorial[Staged practical tutorial / Skip]
-    First -->|Yes| Guide[First-large-map camera guide if needed]
-    Tutorial --> Guide
+    Start --> Guide[First-large-map camera guide if needed]
     Guide --> Battle[Battlefield]
-    Menu -->|Continue Battle| Battle
     Battle --> Input[Deploy, pan, pinch or zoom]
     Input --> Frame[Simulation and render frame]
     Frame --> Battle
@@ -156,12 +162,14 @@ The tutorial's practice state cannot modify a retained battle. Screens outside t
 ### Current Command Surfaces
 
 - Home retains one inactive map preview keyed by sector/difficulty. It never ticks that preview; an active battle uses the retained model instead. Small crowns scale with preview tile size.
-- Daily uses the existing UTC date/reset helpers and exact current-rule completion query. A lifecycle-managed callback redraws Home at wall-clock minute boundaries; it is removed on stop/dispose and outside Home. It does not run simulation or alter an existing Daily attempt's identity.
+- Daily uses the existing UTC date/reset helpers and exact current-rule completion query. A lifecycle-managed callback redraws Home at wall-clock minute boundaries and the Daily page once per second; it is removed on stop/dispose and outside those pages. It does not run simulation or alter an existing Daily attempt's identity.
 - The campaign ribbon counts earned clears across retained records, not unlocked sectors, and opens the selected chapter. The vertical trail shares drawing/position geometry; chapter navigation, protected replacement and footer actions are unchanged.
 - Expanded Playtest Tools show usage while logging is on or off. A warning starts at 450 entries, and at 500 it explicitly describes oldest-event replacement. Export/clear remain manual; capacity and persistence format are unchanged.
 - Home Run details separate battle and retry facts. A finished run is summarized by actual battles cleared. No streak state, new reward or rule migration is introduced.
 
-These implementation descriptions are backed by the current portable and native V12 checks within their reported scope. Physical-phone usability, fluent language review and longer-session behavior remain human checks.
+Home does not scroll. It uses a compact three-mode row when needed and a separate More page in very short/enlarged-display windows, while keeping the primary battle action, earned campaign progress and best total on Home. More uses the same current Run and Daily facts, and its secondary content can scroll. Other long menus retain scrolling.
+
+These implementation descriptions are backed by the current portable and native V13 checks within their reported scope. Physical-phone usability, fluent language review and longer-session behavior remain human checks.
 
 ## Simulation Flow
 
@@ -211,7 +219,7 @@ Collision tests use relative motion over the tick, not a single rendered positio
 
 The PowerShell build compiles Java, generates the original WAV loop, packages resources, produces DEX, aligns and signs the APK, then verifies the signature. Test tools and fixtures are not included in the APK. `.toolchain/`, generated `build/`, signing keys and credentials are ignored by Git.
 
-`android-tests/` is a separate, test-only instrumentation package. Its V12 mode passed four display configurations in all three languages against 0.12.2, including native layout/targets, local-log warnings, cached previews, countdown callback cleanup and feedback persistence after Activity restart. Other historical native modes were not all rerun in this verification step. Its APK is never part of the game's distribution. `DocsVersionTest` checks designated current version fields without treating historical release reports as current evidence.
+`android-tests/` is a separate, test-only instrumentation package. Its V13 mode covers six requested display configurations in all three languages, including native layout/targets, local-log warnings, cached previews, countdown callback cleanup, feedback persistence after Activity restart, first-mode onboarding, expanded-board troop swipes and shifted Pause input. Native View dimensions are recorded beside the captures; requested emulator sizes are not physical tablet measurements. Other historical native modes were not all rerun in this verification step. Its APK is never part of the game's distribution. `DocsVersionTest` checks designated current version fields without treating historical release reports as current evidence.
 
 `app/` and root Gradle files contain Android. `ios/` and `backend/` are reserved, unimplemented folders in this monorepo. An iOS port can reuse assets, campaign content and specifications, but native Java does not directly compile for iOS. Future online services must be optional so offline play remains available.
 

@@ -114,8 +114,8 @@ public final class V10SceneTest {
         for (float height : new float[] {620, 780, 1040}) {
             GameScene.Profile profile = profile(); profile.tutorialSeen = false;
             Fixture f = new Fixture(profile, null, height);
-            click(f, "play"); click(f, "begin_attempt");
-            check(f.scene.overlay == GameScene.TUTORIAL && f.scene.hasBattle, "First attempt opens its practical tutorial");
+            click(f, "play");
+            check(f.scene.overlay == GameScene.TUTORIAL && !f.scene.hasBattle, "First mode opens tutorial before installing an attempt");
             byte[] battle = f.scene.model.save();
             click(f, "tutorial_next");
             check(render(f).has("Capture a Tile") && !has(f, "tutorial_next"), "Capture practice gates Next");
@@ -141,8 +141,9 @@ public final class V10SceneTest {
             check(render(f).has("BOOST x1.00") && has(f, "tutorial_next"), "Actual king loss removes the practiced boost and enables Next");
             advance(f, 20); sameBattle(f, battle, "Every tutorial step freezes the real battle");
             click(f, "tutorial_next"); click(f, "tutorial_next");
-            check(profile.tutorialSeen && f.scene.overlay == GameScene.NONE, "Completing first-run tutorial starts the installed attempt");
-            sameBattle(f, battle, "Tutorial completion does not replace or advance the installed battle");
+            check(profile.tutorialSeen && f.scene.overlay == GameScene.BRIEFING, "Completing first-run tutorial returns to chosen briefing");
+            sameBattle(f, battle, "Tutorial completion does not replace or advance the preview model");
+            click(f,"begin_attempt"); check(f.scene.overlay == GameScene.NONE && f.scene.hasBattle,"Explicit start installs the chosen battle");
         }
     }
 
@@ -178,10 +179,11 @@ public final class V10SceneTest {
         sameBattle(f, battle, "Changing deployment amounts alone never dispatches troops");
         GameScene.Profile first = profile(); first.tutorialSeen = false;
         Fixture fresh = new Fixture(first, null, 780);
-        click(fresh, "play"); click(fresh, "begin_attempt");
+        click(fresh, "play");
         byte[] installed = fresh.scene.model.save(); click(fresh, "tutorial_skip");
-        check(first.tutorialSeen && fresh.scene.overlay == GameScene.NONE, "First-run tutorial can be skipped into the selected battle");
-        sameBattle(fresh, installed, "First-run Skip preserves the already installed battle");
+        check(first.tutorialSeen && fresh.scene.overlay == GameScene.BRIEFING, "First-run Skip continues into the selected briefing");
+        sameBattle(fresh, installed, "First-run Skip preserves the preview model");
+        click(fresh,"begin_attempt");
     }
 
     private static void difficultyAndRecords() throws Exception {
@@ -422,9 +424,10 @@ public final class V10SceneTest {
         check(restored.scene.overlay == GameScene.NONE && profile.cameraGuideSeen, "Saved large-map continuation does not repeat guidance");
         GameScene.Profile first = profile(); first.unlocked = 59; first.selectedSector = 30;
         first.tutorialSeen = false; first.cameraGuideSeen = false;
-        Fixture tutorial = new Fixture(first, null, 780); click(tutorial, "play"); click(tutorial, "begin_attempt");
+        Fixture tutorial = new Fixture(first, null, 780); click(tutorial, "play");
         check(tutorial.scene.overlay == GameScene.TUTORIAL, "First-run tutorial precedes first-large-map guidance");
         click(tutorial, "tutorial_skip");
+        click(tutorial, "begin_attempt");
         check(tutorial.scene.overlay == GameScene.CAMERA_HELP, "Finishing or skipping first-run tutorial still presents large-map guidance");
     }
 

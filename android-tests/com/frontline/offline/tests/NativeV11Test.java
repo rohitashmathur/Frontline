@@ -59,7 +59,7 @@ public final class NativeV11Test extends Instrumentation {
         if ("true".equals(args.getString("restore"))) mode = "restore";
         expectedLanguage = args.getString("expectedLanguage", "en");
         nextLanguage = args.getString("nextLanguage", "");
-        if (!shot.matches("[a-z0-9-]+") || !Arrays.asList("suite", "relaunch", "restore", "glyph", "v12screens").contains(mode)
+        if (!shot.matches("[a-z0-9-]+") || !Arrays.asList("suite", "relaunch", "restore", "glyph", "v12screens", "v13screens").contains(mode)
             || !supported(expectedLanguage) || !nextLanguage.isEmpty() && !supported(nextLanguage))
             throw new IllegalArgumentException("V11 harness arguments");
         start();
@@ -72,7 +72,7 @@ public final class NativeV11Test extends Instrumentation {
         Throwable failure = null;
         boolean retain = false;
         try {
-            if (mode.equals("v12screens")) {
+            if (mode.equals("v12screens") || mode.equals("v13screens")) {
                 require(!backup.getBoolean(MARKER,false),"interrupted fixture requires restore-only first");
                 copy(backup,storage.getAll());
                 require(backup.edit().putBoolean(MARKER,true).commit(),"original preferences backed up");
@@ -80,6 +80,7 @@ public final class NativeV11Test extends Instrumentation {
                     .putBoolean("sound",false).putBoolean("music",false).putBoolean("haptics",false)
                     .putInt("difficulty",1).putInt("unlocked",2).putInt("best-0",1700).putInt("stars-0",2).commit(),"V12 presentation fixture installed");
                 launch(); ui(this::v12Screens); v12Details();
+                if (mode.equals("v13screens")) ui(this::v13Details);
             } else if (mode.equals("suite")) {
                 require(!backup.getBoolean(MARKER, false), "interrupted fixture requires restore-only first");
                 copy(backup, storage.getAll());
@@ -144,7 +145,7 @@ public final class NativeV11Test extends Instrumentation {
     }
 
     private void v12Screens() throws Exception {
-        require("0.12.2".equals(read(type("AppVersion"),"NAME")),"V12.2 footer matches release");
+        require("0.13.0".equals(read(type("AppVersion"),"NAME")),"V13 footer matches release");
         call(scene,"start",1); Object model = read(scene,"model");
         call(model,"launch",0,1,.25); write(model,"elapsed",17f);
         write(scene,"overlay",constant("GameScene","MENU"));
@@ -194,7 +195,8 @@ public final class NativeV11Test extends Instrumentation {
         for (int page = 0; page < 50; page++) {
             render().recycle(); checkLabels();
             String method = (int)read(scene,"overlay") == constant("GameScene","MENU") ? "drawMenu"
-                : (int)read(scene,"overlay") == constant("GameScene","SETTINGS") ? "drawSettings" : "drawSectors";
+                : (int)read(scene,"overlay") == constant("GameScene","SETTINGS") ? "drawSettings"
+                : (int)read(scene,"overlay") == constant("GameScene","MORE") ? "drawMore" : "drawSectors";
             require(joined(textLayout(method)).contains((String)read(type("AppVersion"),"NAME")),"version footer remains visible when scrolling");
             List<?> controls = buttons(); float density = view.getResources().getDisplayMetrics().density;
             for (Object b : controls) { Rect r = bounds(b); require(r.width()+1 >= 48*density && r.height()+1 >= 48*density,"native controls at least 48dp"); }
@@ -288,6 +290,36 @@ public final class NativeV11Test extends Instrumentation {
             require((supported(device) ? device : "en").equals(read(profile, "language")), "fresh install accepts supported device language or English fallback");
         });
         close();
+    }
+    private void v13Details() throws Exception {
+        for (String language : LANGUAGES) {
+            write(profile,"language",language); write(profile,"tutorialSeen",true);
+            call(scene,"start",59); write(scene,"overlay",constant("GameScene","MENU"));
+            homeBounds(); require(!(boolean)call(scene,"canScrollScreen"),"Home never needs scrolling");
+            require(optionalButton("campaign_progress") != null,"campaign progress visible on initial Home");
+            List<TextLine> home = capture(language,"v13-home","drawMenu");
+            String best = (String)call(type("Localization"),"text",language,"deck.best_total",new Object[] {call(profile,"totalScore")});
+            require(joined(home).contains(best),"best total visible without scrolling");
+            tap("settings"); tap("music"); tap("sound"); tap("haptics");
+            capture(language,"v13-settings-on","drawSettings");
+            tap("music"); tap("sound"); tap("haptics"); tap("back");
+            write(profile,"tutorialSeen",false); tap("logistics");
+            require((int)read(scene,"overlay") == constant("GameScene","TUTORIAL"),"first native Lab entry is gated");
+            capture(language,"v13-first-tutorial","drawTutorial"); tap("tutorial_skip");
+            require((boolean)read(profile,"tutorialSeen") && storage.getBoolean("tutorial-seen",false),"Skip persists seen flag");
+            require((int)read(scene,"overlay") == constant("GameScene","LOGISTICS"),"Skip continues intended Lab");
+            write(scene,"overlay",constant("GameScene","NONE")); render().recycle();
+            capture(language,"v13-battle",null);
+            Object model = read(scene,"model"); int king = (int)call(model,"originalKing",0);
+            float[] a = (float[])call(scene,"position",king), b = (float[])call(scene,"position",king == 0 ? 1 : 0);
+            int sent = (int)read(model,"unitsSent");
+            touch(MotionEvent.ACTION_DOWN,a); touch(MotionEvent.ACTION_MOVE,b); touch(MotionEvent.ACTION_UP,b);
+            require((int)read(model,"unitsSent") > sent,"native expanded battlefield accepts troop swipe");
+            tap("pause"); require((int)read(scene,"overlay") == constant("GameScene","PAUSE"),"native shifted Pause target works");
+            tap("menu");
+            java.util.Map<?,?> widths = (java.util.Map<?,?>)read(view,"textWidths");
+            require(widths.size() <= 1024,"native text metric cache is bounded");
+        }
     }
 
     private void nativeProgressMigration() throws Exception {
@@ -601,6 +633,14 @@ public final class NativeV11Test extends Instrumentation {
             for (int y = (int)read(view, "safeTop"); y < bitmap.getHeight() - (int)read(view, "safeBottom"); y += 8)
                 for (int x = 0; x < bitmap.getWidth(); x += 8) if (bitmap.getPixel(x, y) != 0xFF17191B) populated++;
             require(populated > 100, "nonblank native fixture " + language + "/" + name);
+            if ("drawMenu".equals(drawMethod)) {
+                float scale = (float)read(view,"scale"), offset = (float)read(view,"offsetX");
+                int branded = 0, safe = (int)read(view,"safeTop");
+                for (int y = safe+(int)(22*scale); y < safe+(int)(62*scale); y += 2)
+                    for (int x = Math.max(0,(int)(offset+18*scale)); x < Math.min(bitmap.getWidth(),(int)(offset+240*scale)); x += 2)
+                        if (bitmap.getPixel(x,y) != 0xFF17191B) branded++;
+                require(branded > 20,"Home brand is visibly rendered " + language + "/" + name);
+            }
             lines = textLayout(drawMethod);
             checkLabels();
             String visible = joined(lines);
@@ -613,7 +653,8 @@ public final class NativeV11Test extends Instrumentation {
                 require(!visible.contains("TIME / 3-STAR TARGET") && !visible.contains("NO FASTER TIME"), "mission result avoids campaign speed messaging");
             }
             savePng(bitmap, "fixture-" + language + "-" + name + ".png");
-            StringBuilder report = new StringBuilder("FIXTURE: reflective deterministic model/scene state; native Android text measurements.\n");
+            StringBuilder report = new StringBuilder("FIXTURE: reflective deterministic model/scene state; native Android text measurements.\n")
+                .append("Native View: ").append(bitmap.getWidth()).append('x').append(bitmap.getHeight()).append(" px\n");
             for (TextLine line : lines) report.append(line.bounds).append('\t').append(line.text).append('\n');
             try (FileOutputStream stream = new FileOutputStream(new File(output, "fixture-" + language + "-" + name + "-layout.txt"))) {
                 stream.write(report.toString().getBytes(StandardCharsets.UTF_8));
@@ -631,7 +672,7 @@ public final class NativeV11Test extends Instrumentation {
         List<TextLine> lines = new ArrayList<>();
         int[] clipped = {0};
         List<RectF> clips = new ArrayList<>();
-        boolean commandScreen = "drawMenu".equals(drawMethod) || "drawSectors".equals(drawMethod) || "drawSettings".equals(drawMethod);
+        boolean commandScreen = "drawMenu".equals(drawMethod) || "drawSectors".equals(drawMethod) || "drawSettings".equals(drawMethod) || "drawMore".equals(drawMethod);
         Object graphics = Proxy.newProxyInstance(activity.getClassLoader(), new Class<?>[] {type("GameScene$Graphics")}, (proxy, method, args) -> {
             if (method.getName().equals("measureText")) return call(view, "measureText", args);
             if (method.getName().equals("clip")) { clipped[0]++; clips.add(new RectF((float)args[0],(float)args[1],(float)args[0]+(float)args[2],(float)args[1]+(float)args[3])); }
@@ -656,8 +697,9 @@ public final class NativeV11Test extends Instrumentation {
             else { actual.clear(); call(scene, drawMethod, call(scene, "localized", graphics)); }
         } finally { actual.clear(); actual.addAll(original); }
         float height = (float)read(scene, "height");
+        float left = drawMethod == null ? (420-(float)read(scene,"battlefieldWidth"))/2 : 0;
         for (TextLine line : lines) {
-            require(line.bounds.left >= -1 && line.bounds.right <= 421 && line.bounds.top >= -1 && line.bounds.bottom <= height + 1,
+            require(line.bounds.left >= left-1 && line.bounds.right <= 421-left && line.bounds.top >= -1 && line.bounds.bottom <= height + 1,
                 "native text ink inside scene: " + line.text + " " + line.bounds);
         }
         if (drawMethod != null) {
@@ -755,6 +797,9 @@ public final class NativeV11Test extends Instrumentation {
     }
     private Object reveal(String id) throws Exception {
         Object b = visible(id); if (b != null) return b;
+        if ((int)read(scene,"overlay") == constant("GameScene","MENU") && !id.equals("more")) {
+            Object more = visible("more"); if (more != null) call(scene,"activateButton","more");
+        }
         String section = id.startsWith("language_") ? "language_picker"
             : id.equals("playtest_log") || id.equals("export_log") || id.equals("clear_log") ? "tools" : null;
         if (section != null) { Object header = visible(section); if (header != null) call(scene,"activateButton",section); }

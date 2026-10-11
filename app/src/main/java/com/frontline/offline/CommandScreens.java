@@ -6,7 +6,7 @@ import static com.frontline.offline.GameScene.*;
 final class CommandScreens {
     interface Controls { void add(String id,String label,float x,float y,float w,float h); }
     private final Profile profile;
-    private final float[] offsets = new float[3];
+    private final float[] offsets = new float[4];
     private int slot, page = -1;
     private GameModel cachedPreview;
     private static final float CAMPAIGN_TRAIL_TOP = 106, CAMPAIGN_NODE_X = 64;
@@ -23,7 +23,7 @@ final class CommandScreens {
     boolean scrollable() { return limit > 0; }
     boolean inContent(float py) { return py >= top && py < bottom; }
     void reset(int overlay) { offsets[index(overlay)] = 0; }
-    private static int index(int overlay) { return overlay == SECTORS ? 1 : overlay == SETTINGS ? 2 : 0; }
+    private static int index(int overlay) { return overlay == SECTORS ? 1 : overlay == SETTINGS ? 2 : overlay == MORE ? 3 : 0; }
     private void begin(Graphics g,int overlay,float height,float minTouch,float header,float content) {
         slot = index(overlay); touch = Math.max(64,minTouch); top = header; bottom = height-40;
         limit = Math.max(0,content-(bottom-top)); offsets[slot] = Math.min(offsets[slot],limit);
@@ -79,25 +79,33 @@ final class CommandScreens {
     void home(Graphics g,Controls controls,GameModel model,boolean active,long now,float height,float minTouch) {
         touch = Math.max(64,minTouch); header(g,controls,"",true,true);
         float dailyY = 18+touch;
+        boolean shortWindow = height-40-(28+2*touch) < 86+3*touch+30;
         boolean done = profile.progress.dailyCompleted(Challenge.date(now),1,Challenge.DAILY_VERSION,GameModel.RULES_VERSION,Challenge.CONFIG_VERSION);
         String dailyState = tr(done ? "deck.daily_done" : "deck.daily_available");
         String reset = dailyReset(now);
-        controls.add("daily",tr("deck.daily_label",dailyState,reset),22,dailyY,376,touch);
-        g.rect(22,dailyY,376,touch,8,BORDER); g.rect(23,dailyY+1,374,touch-2,7,PANEL);
-        icon(g,"daily",42,dailyY+touch/2,done ? COLORS[0] : WHITE);
-        text(g,"Daily Mission",65,dailyY+touch/2-5,15,290,WHITE,true,0);
-        text(g,dailyState+" / "+reset,65,dailyY+touch/2+16,12,300,MUTED,false,0);
-        chevron(g,382,dailyY+touch/2,MUTED);
+        if (!shortWindow) {
+            controls.add("daily",tr("deck.daily_label",dailyState,reset),22,dailyY,376,touch);
+            g.rect(22,dailyY,376,touch,8,BORDER); g.rect(23,dailyY+1,374,touch-2,7,PANEL);
+            icon(g,"daily",42,dailyY+touch/2,done ? COLORS[0] : WHITE);
+            text(g,"Daily Mission",65,dailyY+touch/2-5,15,290,WHITE,true,0);
+            text(g,dailyState+" / "+reset,65,dailyY+touch/2+16,12,300,MUTED,false,0);
+            chevron(g,382,dailyY+touch/2,MUTED);
+        }
         int columns = Math.min(5,Math.max(1,(int)(376/touch)));
-        float shortcuts = ((5+columns-1)/columns)*(touch+24);
-        float headerHeight = dailyY+touch+10;
-        float heroExtra = Math.min(24,Math.max(0,height-40-headerHeight-424));
-        float coverageY = 129+heroExtra, barY = 141+heroExtra, actionY = 157+heroExtra;
-        float modeY = actionY+touch+12, modeHeight = Math.max(104,touch);
-        float labY = modeY+modeHeight+12, labHeight = Math.max(74,touch);
-        float shortcutY = labY+labHeight+36, progressY = shortcutY+shortcuts+20;
-        float progressHeight = Math.max(80,touch);
-        begin(g,MENU,height,minTouch,headerHeight,progressY+progressHeight+16);
+        float shortcuts = ((5+columns-1)/columns)*(touch+20);
+        float headerHeight = shortWindow ? dailyY+10 : dailyY+touch+10;
+        float available = height-40-headerHeight;
+        float normalHeight = 138+touch+Math.max(104,touch)+Math.max(74,touch)+Math.max(80,touch)+shortcuts+58;
+        boolean compact = normalHeight > available;
+        float progressHeight = Math.max(compact ? 64 : 80,touch);
+        float modeHeight = Math.max(compact ? 72 : 104,touch), labHeight = Math.max(74,touch);
+        boolean overflow = shortWindow || compact && 96+touch+modeHeight+progressHeight+shortcuts+44 > available;
+        float actionY = compact ? overflow ? 86 : 96 : 138;
+        float modeY = actionY+touch+8, labY = modeY+modeHeight+10;
+        float shortcutY = available-(overflow ? touch : shortcuts)-6;
+        float progressY = shortcutY-progressHeight-18;
+        begin(g,MENU,height,minTouch,headerHeight,available);
+        offsets[0] = 0;
         int sector = active ? model.levelIndex : profile.selectedSector;
         String category = active && model.battleMode == GameModel.MODE_RUN ? tr("run.title")
             : active && model.battleMode == GameModel.MODE_LOGISTICS ? tr("deck.lab")
@@ -105,19 +113,21 @@ final class CommandScreens {
         text(g,category,22,y(13),11,230,MUTED,true,0);
         if (!active || model.battleMode == GameModel.MODE_CAMPAIGN && model.objectiveType == 0)
             text(g,tr("deck.chapter",Campaign.chapterIndex(sector)+1,Campaign.CHAPTERS.length),398,y(13),11,140,MUTED,false,2);
-        preview(g,active ? model : homePreview(sector,profile.difficulty),24,y(26),124,96+heroExtra);
+        preview(g,active ? model : homePreview(sector,profile.difficulty),24,y(compact ? 23 : 26),124,compact ? 56 : 81);
         String title = active && model.battleMode == GameModel.MODE_LOGISTICS ? tr("logistics.map."+Logistics.getIndex(model))
             : active && model.objectiveType != 0 ? Challenge.PRESETS[Math.max(0,Math.min(Challenge.PRESETS.length-1,model.challengeId))].name : GameModel.LEVELS[sector].name;
-        text(g,title,166,y(45),24,230,WHITE,true,0);
+        text(g,title,166,y(compact ? 35 : 45),compact ? 19 : 24,230,WHITE,true,0);
         String detail = active && model.battleMode == GameModel.MODE_RUN && profile.run != null ? tr("deck.run_battle",profile.run.node+1)
             : tr("deck.sector",sector+1,GameModel.LEVELS.length);
-        text(g,detail,166,y(66),12,230,MUTED,false,0);
-        text(g,GameModel.DIFFICULTIES[active ? model.difficulty : profile.difficulty],166,y(86),12,230,MUTED,false,0);
-        text(g,tr(active ? "deck.in_progress" : "deck.ready"),166,y(106),12,230,COLORS[0],false,0);
+        String difficulty = translated(GameModel.DIFFICULTIES[active ? model.difficulty : profile.difficulty]);
+        text(g,compact ? detail+" / "+difficulty : detail,166,y(compact ? 54 : 66),12,230,MUTED,false,0);
+        if (!compact) text(g,difficulty,166,y(86),12,230,MUTED,false,0);
+        if (!compact) text(g,tr(active ? "deck.in_progress" : "deck.ready"),166,y(106),12,230,COLORS[0],false,0);
         int coverage = active ? Math.round(100f*model.owned(0)/model.territories.size()) : 0;
-        text(g,active ? tr("deck.coverage",coverage) : tr("deck.star_target",GameScene.time(GameModel.LEVELS[sector].parSeconds)),22,y(coverageY),13,270,WHITE,true,0);
-        if (active) g.text(GameScene.time(model.elapsed),398,y(coverageY),13,MUTED,false,2);
+        text(g,active ? tr("deck.coverage",coverage) : tr("deck.star_target",GameScene.time(GameModel.LEVELS[sector].parSeconds)),compact ? 166 : 22,y(compact ? 74 : 123),compact ? 11 : 13,compact ? 169 : 270,WHITE,true,0);
+        if (active) g.text(GameScene.time(model.elapsed),398,y(compact ? 74 : 123),compact ? 11 : 13,MUTED,false,2);
         if (active) {
+            float barY = compact ? 83 : 130;
             g.rect(22,y(barY),376,8,2,BORDER);
             float x = 22;
             for (int owner = 0; owner <= model.level().opponents; owner++) {
@@ -135,24 +145,55 @@ final class CommandScreens {
         String runDetail = liveRun ? tr("deck.run_battle",profile.run.node+1)
             : lastRun != null && lastRun.terminal() ? tr("deck.run_last",lastRun.battlesCleared(),RunState.BATTLE_COUNT) : tr("deck.five_battles");
         String retryDetail = liveRun ? tr("run.retries",profile.run.retriesRemaining()) : "";
-        mode(g,controls,"run",tr("deck.classic_run"),runDetail,retryDetail,22,y(modeY),182,modeHeight);
-        mode(g,controls,"missions","Missions",tr("deck.objectives"),"",216,y(modeY),182,modeHeight);
-        hit(controls,"logistics",tr("deck.lab"),22,y(labY),376,labHeight);
-        icon(g,"logistics",39,y(labY+labHeight/2),MUTED); text(g,tr("deck.lab"),65,y(labY+22),17,290,WHITE,true,0);
-        text(g,tr("deck.routed_maps",Logistics.PRESETS.length),65,y(labY+43),12,290,MUTED,false,0);
-        text(g,tr("logistics.experimental"),65,y(labY+62),11,290,COLORS[2],true,0); chevron(g,385,y(labY+labHeight/2),MUTED);
-        g.line(22,y(labY+labHeight+8),398,y(labY+labHeight+8),1,BORDER);
-        text(g,tr("deck.more"),22,y(shortcutY-9),11,376,MUTED,true,0);
+        if (!overflow && compact) {
+            mode(g,controls,"run",tr("deck.classic_run"),runDetail,retryDetail,22,y(modeY),120,modeHeight,true);
+            mode(g,controls,"missions","Missions",tr("deck.objectives"),"",150,y(modeY),120,modeHeight,true);
+            mode(g,controls,"logistics",tr("deck.lab"),tr("logistics.experimental"),"",278,y(modeY),120,modeHeight,true);
+        } else if (!overflow) {
+            mode(g,controls,"run",tr("deck.classic_run"),runDetail,retryDetail,22,y(modeY),182,modeHeight,false);
+            mode(g,controls,"missions","Missions",tr("deck.objectives"),"",216,y(modeY),182,modeHeight,false);
+            hit(controls,"logistics",tr("deck.lab"),22,y(labY),376,labHeight);
+            icon(g,"logistics",39,y(labY+labHeight/2),MUTED); text(g,tr("deck.lab"),65,y(labY+22),17,290,WHITE,true,0);
+            text(g,tr("deck.routed_maps",Logistics.PRESETS.length),65,y(labY+43),12,290,MUTED,false,0);
+            text(g,tr("logistics.experimental"),65,y(labY+62),11,290,COLORS[2],true,0); chevron(g,385,y(labY+labHeight/2),MUTED);
+        }
+        campaignProgress(g,controls,progressY,progressHeight);
+        if (overflow) action(g,controls,"more",tr("deck.more_button"),22,y(shortcutY),376,touch,false);
+        else {
+            text(g,tr("deck.more"),22,y(shortcutY-5),11,376,MUTED,true,0);
+            shortcuts(g,controls,shortcutY,columns);
+        }
+        end(g,height);
+    }
+    private void shortcuts(Graphics g,Controls controls,float row,int columns) {
         String[] ids = {"sectors","challenges","mastery","tutorial","help"};
         String[] labels = {"Sectors","Challenges","Mastery","How to Play","Rules"};
         float width = 376f/columns;
         for (int i = 0; i < ids.length; i++) {
-            float x = 22+(i%columns)*width, py = y(shortcutY+(i/columns)*(touch+24));
-            hit(controls,ids[i],labels[i],x,py,width,touch+24);
-            icon(g,ids[i],x+width/2,py+touch/2,i == 0 ? COLORS[0] : WHITE);
-            text(g,labels[i],x+width/2,py+touch+13,11,width-6,MUTED,false,1);
+            float x = 22+(i%columns)*width, py = y(row+(i/columns)*(touch+20));
+            hit(controls,ids[i],labels[i],x,py,width,touch+20);
+            icon(g,ids[i],x+width/2,py+touch/2-4,i == 0 ? COLORS[0] : WHITE);
+            text(g,labels[i],x+width/2,py+touch+8,11,width-6,MUTED,false,1);
         }
-        campaignProgress(g,controls,progressY,progressHeight);
+    }
+    void more(Graphics g,Controls controls,long now,float height,float minTouch) {
+        touch = Math.max(64,minTouch); header(g,controls,tr("deck.more_button"),false,true);
+        int columns = Math.min(3,Math.max(1,(int)(376/touch)));
+        float rowHeight = Math.max(104,touch);
+        float links = ((4+columns-1)/columns)*(rowHeight+12);
+        begin(g,MORE,height,minTouch,26+touch,links+36+((5+columns-1)/columns)*(touch+20));
+        float width = (376-12*(columns-1))/columns;
+        String[] ids = {"run","missions","logistics","daily"};
+        String[] labels = {tr("deck.classic_run"),translated("Missions"),tr("deck.lab"),translated("Daily Mission")};
+        boolean liveRun = profile.run != null && !profile.run.terminal();
+        RunState lastRun = profile.lastRun != null ? profile.lastRun : profile.run;
+        String runDetail = liveRun ? tr("deck.run_battle",profile.run.node+1)
+            : lastRun != null && lastRun.terminal() ? tr("deck.run_last",lastRun.battlesCleared(),RunState.BATTLE_COUNT) : tr("deck.five_battles");
+        boolean done = profile.progress.dailyCompleted(Challenge.date(now),1,Challenge.DAILY_VERSION,GameModel.RULES_VERSION,Challenge.CONFIG_VERSION);
+        String[] details = {runDetail,tr("deck.objectives"),tr("logistics.experimental"),tr(done ? "deck.daily_done" : "deck.daily_available")};
+        for (int i = 0; i < 4; i++) mode(g,controls,ids[i],labels[i],details[i],i == 0 && liveRun ? tr("run.retries",profile.run.retriesRemaining()) : "",22+(i%columns)*(width+12),y((i/columns)*(rowHeight+12)),width,rowHeight,false);
+        text(g,tr("deck.more"),22,y(links+22),11,376,MUTED,true,0);
+        shortcuts(g,controls,links+36,Math.min(3,Math.max(1,(int)(376/touch))));
         end(g,height);
     }
     GameModel homePreview(int sector,int difficulty) {
@@ -171,25 +212,27 @@ final class CommandScreens {
         int score = profile.totalScore();
         hit(controls,"campaign_progress",tr("deck.progress_label",cleared,GameModel.LEVELS.length,score),22,y(row),376,h);
         g.line(22,y(row),398,y(row),1,BORDER);
-        text(g,"Campaign",22,y(row+20),11,190,MUTED,true,0);
-        text(g,tr("deck.cleared",cleared,GameModel.LEVELS.length),398,y(row+20),11,180,MUTED,false,2);
+        float label = h >= 80 ? 20 : 17, bar = h >= 80 ? 32 : 28, best = h >= 80 ? 65 : 52;
+        text(g,"Campaign",22,y(row+label),11,190,MUTED,true,0);
+        text(g,tr("deck.cleared",cleared,GameModel.LEVELS.length),398,y(row+label),11,180,MUTED,false,2);
         float width = (376f-4*(Campaign.CHAPTERS.length-1))/Campaign.CHAPTERS.length;
         for (int chapter = 0; chapter < Campaign.CHAPTERS.length; chapter++) {
             int count = 0;
             for (int sector = chapter*6; sector < chapter*6+6; sector++) if (profile.cleared(sector)) count++;
             int color = COLORS[chapter == 0 ? 0 : Campaign.CHAPTERS[chapter].rulerFaction];
             float x = 22+chapter*(width+4);
-            g.rect(x,y(row+32),width,8,2,mix(PANEL,color,.35f));
-            if (count > 0) g.rect(x,y(row+32),width*count/6,8,2,color);
+            g.rect(x,y(row+bar),width,8,2,mix(PANEL,color,.35f));
+            if (count > 0) g.rect(x,y(row+bar),width*count/6,8,2,color);
         }
-        text(g,tr("deck.best_total",score),22,y(row+65),12,376,COLORS[0],true,0);
+        text(g,tr("deck.best_total",score),22,y(row+best),12,376,COLORS[0],true,0);
     }
-    private void mode(Graphics g,Controls controls,String id,String label,String detail,String extra,float x,float py,float w,float h) {
+    private void mode(Graphics g,Controls controls,String id,String label,String detail,String extra,float x,float py,float w,float h,boolean compact) {
         hit(controls,id,translated(label)+" / "+detail+(extra.isEmpty() ? "" : " / "+extra),x,py,w,h);
         g.rect(x,py,w,h,8,BORDER); g.rect(x+1,py+1,w-2,h-2,7,PANEL);
-        icon(g,id,x+27,py+20,COLORS[0]); text(g,label,x+14,py+50,17,w-28,WHITE,true,0);
-        text(g,detail,x+14,py+72,12,w-28,MUTED,false,0);
-        if (!extra.isEmpty()) text(g,extra,x+14,py+92,12,w-28,COLORS[2],false,0);
+        if (!compact) icon(g,id,x+27,py+20,COLORS[0]);
+        text(g,label,x+(compact ? 8 : 14),py+(compact ? 24 : 50),compact ? 13 : 17,w-(compact ? 16 : 28),WHITE,true,0);
+        text(g,detail,x+(compact ? 8 : 14),py+(compact ? 44 : 72),compact ? 11 : 12,w-(compact ? 16 : 28),MUTED,false,0);
+        if (!extra.isEmpty()) text(g,extra,x+(compact ? 8 : 14),py+(compact ? 61 : 92),11,w-(compact ? 16 : 28),COLORS[2],false,0);
     }
     void campaign(Graphics g,Controls controls,GameModel model,boolean active,int chapterIndex,float height,float minTouch) {
         touch = Math.max(64,minTouch); header(g,controls,"Campaign",false,true);

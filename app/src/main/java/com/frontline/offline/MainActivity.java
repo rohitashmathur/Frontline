@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Paint;
@@ -42,6 +43,8 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        boolean tablet = getResources().getConfiguration().smallestScreenWidthDp >= 600;
+        setRequestedOrientation(tablet ? ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR : ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         battleView = new BattleView(this);
@@ -88,6 +91,19 @@ public final class MainActivity extends Activity {
         private final Path path = new Path();
         private final Typeface regular = Typeface.create("sans-serif",Typeface.NORMAL);
         private final Typeface bold = Typeface.create("sans-serif",Typeface.BOLD);
+        private final java.util.LinkedHashMap<TextKey,Float> textWidths = new java.util.LinkedHashMap<TextKey,Float>(256,.75f,true) {
+            @Override protected boolean removeEldestEntry(java.util.Map.Entry<TextKey,Float> entry) { return size() > 1024; }
+        };
+        private static final class TextKey {
+            final String text; final float size; final boolean bold;
+            TextKey(String text,float size,boolean bold) { this.text = text; this.size = size; this.bold = bold; }
+            @Override public int hashCode() { return 31*(31*text.hashCode()+Float.floatToIntBits(size))+(bold ? 1 : 0); }
+            @Override public boolean equals(Object value) {
+                if (!(value instanceof TextKey)) return false;
+                TextKey other = (TextKey)value;
+                return size == other.size && bold == other.bold && text.equals(other.text);
+            }
+        }
         private final Handler handler = new Handler();
         private final GameScene scene;
         private final ToneGenerator audio;
@@ -134,7 +150,7 @@ public final class MainActivity extends Activity {
         };
 
         private final Runnable refreshHome = new Runnable() {
-            @Override public void run() { if (running && scene.overlay == GameScene.MENU) invalidate(); }
+            @Override public void run() { if (running && (scene.overlay == GameScene.MENU || scene.overlay == GameScene.DAILY)) invalidate(); }
         };
 
         BattleView(Context context) {
@@ -233,9 +249,11 @@ public final class MainActivity extends Activity {
             canvas = frame;
             frame.drawColor(GameScene.BACKGROUND);
             int availableHeight = Math.max(1,getHeight()-safeTop-safeBottom);
-            scale = Math.min(getWidth()/420f,availableHeight/620f);
-            offsetX = (getWidth()-420*scale)/2;
-            scene.minimumTouchSize = 48*getResources().getDisplayMetrics().density/scale;
+            Viewport viewport = new Viewport(getWidth(),availableHeight,getResources().getDisplayMetrics().density,
+                getResources().getConfiguration().smallestScreenWidthDp >= 600);
+            scale = viewport.scale; offsetX = viewport.offsetX;
+            scene.minimumTouchSize = viewport.minimumTouch;
+            scene.battlefieldWidth = viewport.battlefieldWidth;
             long now = System.nanoTime();
             if (running && previousFrame != 0) scene.update(Math.min(.06f,(now-previousFrame)/1_000_000_000f));
             previousFrame = now;
@@ -244,8 +262,8 @@ public final class MainActivity extends Activity {
             frame.restore();
             if (now-lastSave > 15_000_000_000L) { save(); lastSave = now; }
             handler.removeCallbacks(refreshHome);
-            if (running && scene.overlay == GameScene.MENU)
-                handler.postDelayed(refreshHome,60_000-Math.floorMod(System.currentTimeMillis(),60_000));
+            if (running && (scene.overlay == GameScene.MENU || scene.overlay == GameScene.DAILY))
+                handler.postDelayed(refreshHome,scene.overlay == GameScene.DAILY ? 1000 : 60_000-Math.floorMod(System.currentTimeMillis(),60_000));
             if (running && scene.needsAnimation()) postInvalidateOnAnimation();
         }
 
@@ -427,7 +445,9 @@ public final class MainActivity extends Activity {
         }
         @Override public float measureText(String text,float size,boolean isBold) {
             paint.setTextSize(size); paint.setTypeface(isBold ? bold : regular);
-            return paint.measureText(text);
+            TextKey key = new TextKey(text,size,isBold);
+            Float cached = textWidths.get(key); if (cached != null) return cached;
+            float width = paint.measureText(text); textWidths.put(key,width); return width;
         }
         private String translate(String text) { return Localization.translate(scene.profile.language,text); }
 

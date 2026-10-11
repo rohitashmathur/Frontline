@@ -54,13 +54,13 @@ public final class V12ScreensTest {
             auditPages(s,620);
         }
         for (int mode : new int[] {GameModel.MODE_CAMPAIGN,GameModel.MODE_RUN,GameModel.MODE_LOGISTICS}) {
-            GameScene.Profile p = new GameScene.Profile(); GameModel m;
+            GameScene.Profile p = new GameScene.Profile(); p.tutorialSeen = true; GameModel m;
             if (mode == GameModel.MODE_RUN) { p.run = RunState.newRun(9).beginBattle(); m = p.run.createBattle(); }
             else m = mode == GameModel.MODE_LOGISTICS ? Logistics.create(2,1,9) : Challenge.PRESETS[3].create(1,9,3,"");
             GameScene s = new GameScene(p,m,EVENTS); s.back(); byte[] before = m.save();
             press(s,"resume",780); check(s.overlay == GameScene.NONE && Arrays.equals(before,m.save()),"Command Deck resumes each actual battle mode");
         }
-        check(AppVersion.NAME.equals("0.12.2") && AppVersion.CODE == 14,"V12.2 release number");
+        check(AppVersion.NAME.equals("0.13.0") && AppVersion.CODE == 15,"V13 release number");
         System.out.println("PASS: "+checks+" V12 screen checks.");
     }
     private static final class Capture implements CommandScreens.Controls {
